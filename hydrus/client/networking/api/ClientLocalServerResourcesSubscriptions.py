@@ -52,7 +52,8 @@ class APISubscriptionsGetSubscriptionsResource( ClientLocalServerResources.Hydru
                     'can_check_now': query_header.CanCheckNow(),
                     'checker_status': query_header.GetCheckerStatus(),
                     'file_velocity': query_header.GetFileVelocityInfo(),
-                    'file_seed_cache_status': query_header.GetFileSeedCacheStatus().GetStatusText()
+                    'file_seed_cache_status': query_header.GetFileSeedCacheStatus().GetStatusText(),
+                    'last_file_time': query_header.GetLatestAddedTime()
                 }
                 queries_info.append(query_info)
             
