@@ -394,6 +394,9 @@ PERMISSION_ACTION_PETITION = 0
 PERMISSION_ACTION_CREATE = 1
 PERMISSION_ACTION_MODERATE = 2
 
+# client api permissions
+CLIENT_API_PERMISSION_SEARCH_FILES = 0
+
 permission_pair_string_lookup = {
     ( CONTENT_TYPE_ACCOUNTS, None ) : 'cannot change accounts',
     ( CONTENT_TYPE_ACCOUNTS, PERMISSION_ACTION_CREATE ) : 'can create accounts',

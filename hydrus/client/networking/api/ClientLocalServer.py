@@ -18,6 +18,7 @@ from hydrus.client.networking.api import ClientLocalServerResourcesManagePages
 from hydrus.client.networking.api import ClientLocalServerResourcesManagePopups
 from hydrus.client.networking.api import ClientLocalServerResourcesManageServices
 from hydrus.client.networking.api import ClientLocalServerResourcesManageFavouriteTags
+from hydrus.client.networking.api import ClientLocalServerResourcesSubscriptions
 
 class HydrusClientService( HydrusServer.HydrusService ):
     
@@ -185,6 +186,10 @@ class HydrusServiceClientAPI( HydrusClientService ):
         manage_popups.putChild( b'add_popup', ClientLocalServerResourcesManagePopups.HydrusResourceClientAPIRestrictedManagePopupsAddPopup( self._service, self._client_requests_domain ) )
         manage_popups.putChild( b'update_popup', ClientLocalServerResourcesManagePopups.HydrusResourceClientAPIRestrictedManagePopupsUpdatePopup( self._service, self._client_requests_domain ) )
         
-        return root
+        manage_subscriptions = NoResource()
         
-    
+        root.putChild( b'manage_subscriptions', manage_subscriptions )
+        
+        manage_subscriptions.putChild( b'get_subscriptions', ClientLocalServerResourcesSubscriptions.APISubscriptionsGetSubscriptionsResource( self._service, self._client_requests_domain ) )
+        
+        return root

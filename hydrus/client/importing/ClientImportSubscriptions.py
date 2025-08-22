@@ -1405,6 +1405,103 @@ class Subscription( HydrusSerialisable.SerialisableBaseNamed ):
         return self._gug_key_and_name
         
     
+    def GetLastDownloadedFileTime( self ):
+        
+        last_time = 0
+        
+        for query_header in self._query_headers:
+            
+            try:
+                
+                query_log_container = CG.client_controller.Read( 'serialisable_named', HydrusSerialisable.SERIALISABLE_TYPE_SUBSCRIPTION_QUERY_LOG_CONTAINER, query_header.GetQueryLogContainerName() )
+                
+                file_seed_cache = query_log_container.GetFileSeedCache()
+                
+                file_seed = file_seed_cache.GetFirstFileSeed()
+                
+                if file_seed is not None and file_seed.status in CC.SUCCESSFUL_IMPORT_STATES:
+                    
+                    last_time = max( last_time, file_seed.created )
+                    
+                
+            except:
+                
+                continue
+                
+            
+        
+        return last_time
+        
+    
+    def GetLastCheckedTime( self ):
+        
+        last_checked = 0
+        
+        for query_header in self._query_headers:
+            
+            try:
+                
+                query_log_container = CG.client_controller.Read( 'serialisable_named', HydrusSerialisable.SERIALISABLE_TYPE_SUBSCRIPTION_QUERY_LOG_CONTAINER, query_header.GetQueryLogContainerName() )
+                
+                last_checked = max( last_checked, query_log_container.GetLastCheckedTime() )
+                
+            except:
+                
+                continue
+                
+            
+        
+        return last_checked
+        
+    
+    def GetNextCheckTime( self ):
+        
+        next_check_time = None
+        
+        for query_header in self._query_headers:
+            
+            try:
+                
+                query_log_container = CG.client_controller.Read( 'serialisable_named', HydrusSerialisable.SERIALISABLE_TYPE_SUBSCRIPTION_QUERY_LOG_CONTAINER, query_header.GetQueryLogContainerName() )
+                
+                query_next_check_time = query_log_container.GetNextCheckTime()
+                
+                if query_next_check_time is not None:
+                    
+                    if next_check_time is None:
+                        
+                        next_check_time = query_next_check_time
+                        
+                    else:
+                        
+                        next_check_time = min( next_check_time, query_next_check_time )
+                        
+                    
+                
+            except:
+                
+                continue
+                
+            
+        
+        return next_check_time
+        
+    
+    def GetStatus( self ):
+        
+        if self._paused:
+            
+            return 'paused'
+            
+        
+        if not self._NoDelays():
+            
+            return 'delayed: ' + self._no_work_until_reason
+            
+        
+        return 'active'
+        
+    
     def GetQueryHeaders( self ) -> list[ ClientImportSubscriptionQuery.SubscriptionQueryHeader ]:
         
         return self._query_headers
@@ -2172,6 +2269,3 @@ class SubscriptionsManager( ClientDaemons.ManagerWithMainLoop ):
             self._ClearFinishedSubscriptions()
             
             return len( self._names_to_running_subscription_info ) > 0
-            
-        
-    
