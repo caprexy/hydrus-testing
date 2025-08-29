@@ -1,4 +1,11 @@
 import requests
+import json
+import subprocess
+
+def copy_to_clipboard(text):
+    """Copy text to clipboard using macOS pbcopy"""
+    process = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE)
+    process.communicate(text.encode('utf-8'))
 
 def test_subscriptions_api():
     # Your API access key (replace with your actual key)
@@ -20,11 +27,38 @@ def test_subscriptions_api():
         # Print status code and raw response
         print(f"Status Code: {response.status_code}")
         print(f"Response: {response.text}")
+        
+        # If successful, format and copy JSON to clipboard
+        if response.status_code == 200:
+            try:
+                # Parse JSON and format it nicely
+                json_data = response.json()
+                formatted_json = json.dumps(json_data, indent=2)
+                
+                # Copy to clipboard
+                copy_to_clipboard(formatted_json)
+                print("\n✅ Formatted JSON response copied to clipboard!")
+                
+            except json.JSONDecodeError:
+                # If not JSON, copy raw text
+                copy_to_clipboard(response.text)
+                print("\n✅ Raw response copied to clipboard!")
+                
+        else:
+            # Copy error response to clipboard too
+            copy_to_clipboard(f"Status: {response.status_code}\nResponse: {response.text}")
+            print("\n📋 Error response copied to clipboard!")
             
     except requests.exceptions.ConnectionError:
-        print("Error: Could not connect to the Hydrus client. Make sure it's running and the API is enabled.")
+        error_msg = "Error: Could not connect to the Hydrus client. Make sure it's running and the API is enabled."
+        print(error_msg)
+        copy_to_clipboard(error_msg)
+        print("📋 Error message copied to clipboard!")
     except Exception as e:
-        print(f"Error: An unexpected error occurred: {str(e)}")
+        error_msg = f"Error: An unexpected error occurred: {str(e)}"
+        print(error_msg)
+        copy_to_clipboard(error_msg)
+        print("📋 Error message copied to clipboard!")
 
 if __name__ == '__main__':
     test_subscriptions_api()

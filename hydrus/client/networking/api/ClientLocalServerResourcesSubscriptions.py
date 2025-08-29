@@ -20,15 +20,6 @@ class APISubscriptionsGetSubscriptionsResource( ClientLocalServerResources.Hydru
     def __init__(self, service, domain):
         ClientLocalServerResources.HydrusResourceClientAPIRestricted.__init__(self, service, domain)
     
-    def _CheckAPIPermissions( self, request ):
-        request.client_api_permissions.CheckPermission( HC.CLIENT_API_PERMISSION_SEARCH_FILES )
-    
-    def _reportDataUsed( self, request, bytes_used ):
-        return request.client_api_permissions.ReportDataUsed( bytes_used )
-    
-    def _reportRequestUsed( self, request ):
-        return request.client_api_permissions.ReportRequestUsed()
-    
     def _threadDoGETJob( self, request: HydrusServerRequest.HydrusRequest ):
         subscriptions = CG.client_controller.subscriptions_manager.GetSubscriptions()
         
@@ -39,6 +30,13 @@ class APISubscriptionsGetSubscriptionsResource( ClientLocalServerResources.Hydru
             queries_info = []
             
             for query_header in query_headers:
+                # Get next work time (requires bandwidth manager and subscription name)
+                try:
+                    bandwidth_manager = CG.client_controller.network_engine.bandwidth_manager
+                    next_work_time = query_header.GetNextWorkTime(bandwidth_manager, subscription.GetName())
+                except:
+                    next_work_time = None
+                
                 query_info = {
                     'query_text': query_header.GetQueryText(),
                     'human_name': query_header.GetHumanName(),
@@ -52,8 +50,12 @@ class APISubscriptionsGetSubscriptionsResource( ClientLocalServerResources.Hydru
                     'can_check_now': query_header.CanCheckNow(),
                     'checker_status': query_header.GetCheckerStatus(),
                     'file_velocity': query_header.GetFileVelocityInfo(),
-                    'file_seed_cache_status': query_header.GetFileSeedCacheStatus().GetStatusText(),
-                    'last_file_time': query_header.GetLatestAddedTime()
+                    'file_status': query_header.GetFileSeedCacheStatus().GetStatusText(),
+                    'last_file_time': query_header.GetLatestAddedTime(),
+                    'next_work_time': next_work_time,
+                    'expecting_to_work_in_future': query_header.IsExpectingToWorkInFuture(),
+                    'sync_due': query_header.IsSyncDue(),
+                    'initial_sync': query_header.IsInitialSync()
                 }
                 queries_info.append(query_info)
             
