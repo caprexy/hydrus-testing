@@ -47,23 +47,30 @@ def DateTimeToTimestamp( dt: datetime.datetime ) -> int:
             # ok bros, an important thing about time.mktime and datetime.timestamp is they can't always handle <1970!
             # so we'll do some mickey mouse stuff here and this does work
             
-            dt_epoch = datetime.datetime( 1970, 1, 1, tzinfo = datetime.timezone.utc )
+            # Create epoch datetime in UTC
+            dt_epoch = datetime.datetime( 1970, 1, 1 )
             
             # we would want to go dt_local = dt.astimezone(), but we can't do astimezone on a dt with pre-1970 date
             # but we can mess around it. and if an hour of DST is miscalculated fifty years ago, oh well!
             my_current_timezone = datetime.datetime.now().astimezone().tzinfo
             
-            dt_local = datetime.datetime(
+            # Create a timezone-naive version of dt for calculation
+            dt_naive = datetime.datetime(
                 year = dt.year,
                 month = dt.month,
                 day = dt.day,
                 hour = dt.hour,
                 minute = dt.minute,
-                second = dt.second,
-                tzinfo = my_current_timezone
+                second = dt.second
             )
             
-            time_delta = dt_local - dt_epoch
+            # Get the UTC offset for the current timezone
+            my_offset_timedelta = my_current_timezone.utcoffset( None )
+            
+            # Convert to UTC by subtracting the offset
+            dt_utc = dt_naive - my_offset_timedelta
+            
+            time_delta = dt_utc - dt_epoch
             
             timestamp = int( time_delta.total_seconds() )
             
