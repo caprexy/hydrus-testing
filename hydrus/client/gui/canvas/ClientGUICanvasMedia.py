@@ -1493,6 +1493,8 @@ class MediaContainer( QW.QWidget ):
         
         self._cbz_thumbnail_viewer = CBZThumbnailViewer( self, self._background_colour_generator )
         
+        self._cbz_thumbnail_viewer.readyForNeighbourPrefetch.connect( self.readyForNeighbourPrefetch )
+        
         self._controls_bar = QW.QWidget( self )
         self._controls_bar_show_full = True
         
@@ -4046,6 +4048,9 @@ class StaticImage( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
 
 class CBZThumbnailViewer( QW.QWidget ):
     
+    launchMediaViewer = QC.Signal()
+    readyForNeighbourPrefetch = QC.Signal()
+    
     def __init__( self, parent, background_colour_generator ):
         
         super().__init__( parent )
@@ -4123,6 +4128,9 @@ class CBZThumbnailViewer( QW.QWidget ):
                 
         
         self.update()
+        
+        # Emit signal for neighbour prefetch
+        self.readyForNeighbourPrefetch.emit()
         
     
     def paintEvent( self, event ):
@@ -4246,5 +4254,12 @@ class CBZThumbnailViewer( QW.QWidget ):
         launch_path = new_options.GetMimeLaunch( mime )
         
         HydrusPaths.LaunchFile( path, launch_path )
+        
+    
+    def ClearMedia( self ):
+        
+        self._media = None
+        self._thumbnail_qt_pixmap = None
+        self.update()
         
     
