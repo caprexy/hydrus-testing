@@ -1,5 +1,4 @@
 import collections.abc
-import random
 import typing
 
 from qtpy import QtCore as QC
@@ -21,9 +20,6 @@ from hydrus.client import ClientGlobals as CG
 from hydrus.client import ClientLocation
 from hydrus.client import ClientServices
 from hydrus.client import ClientThreading
-from hydrus.client.duplicates import ClientDuplicates
-from hydrus.client.duplicates import ClientPotentialDuplicatesSearchContext
-from hydrus.client.gui import ClientGUIAsync
 from hydrus.client.gui import ClientGUICore as CGC
 from hydrus.client.gui import ClientGUIDialogsManage
 from hydrus.client.gui import ClientGUIDialogsMessage
@@ -33,17 +29,14 @@ from hydrus.client.gui import ClientGUIMenus
 from hydrus.client.gui import ClientGUIRatings
 from hydrus.client.gui import ClientGUIShortcuts
 from hydrus.client.gui import ClientGUITopLevelWindowsPanels
-from hydrus.client.gui import QtPorting as QP
 from hydrus.client.gui.canvas import ClientGUICanvasHoverFrames
 from hydrus.client.gui.canvas import ClientGUICanvasMedia
 from hydrus.client.gui.duplicates import ClientGUIDuplicateActions
-from hydrus.client.gui.duplicates import ClientGUIDuplicatesContentMergeOptions
 from hydrus.client.gui.media import ClientGUIMediaSimpleActions
 from hydrus.client.gui.media import ClientGUIMediaModalActions
 from hydrus.client.gui.media import ClientGUIMediaControls
 from hydrus.client.gui.media import ClientGUIMediaMenus
 from hydrus.client.gui.metadata import ClientGUIManageTags
-from hydrus.client.gui.panels import ClientGUIScrolledPanels
 from hydrus.client.gui.panels import ClientGUIScrolledPanelsCommitFiltering
 from hydrus.client.gui.panels import ClientGUIScrolledPanelsEdit
 from hydrus.client.gui.widgets import ClientGUIPainterShapes
@@ -54,6 +47,7 @@ from hydrus.client.metadata import ClientContentUpdates
 from hydrus.client.metadata import ClientRatings
 from hydrus.client.metadata import ClientTags
 from hydrus.client.metadata import ClientTagSorting
+from hydrus.client.duplicates import ClientPotentialDuplicatesSearchContext
 
 def AddAudioVolumeMenu( menu, canvas_type ):
     
@@ -614,8 +608,90 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
     
     def _PrefetchNeighbours( self ):
         
-        pass
+        # Get the media results panel to access the media list
+        # The preview pane doesn't have its own media list, but the media results panel does
+        parent = self.parent()
         
+        # Navigate up to find the media results panel
+        while parent is not None:
+            if hasattr(parent, '_media_panel') and parent._media_panel is not None:
+                media_panel = parent._media_panel
+                break
+            parent = parent.parent()
+        else:
+            # Couldn't find the media panel, can't prefetch
+            return
+        
+        # Get the media list from the media panel
+        if not hasattr(media_panel, '_sorted_media') or self._current_media is None:
+            return
+        
+        media_list = media_panel._sorted_media
+        
+        # Find the current media in the list
+        try:
+            current_index = media_list.index(self._current_media)
+        except ValueError:
+            # Current media not in list, can't prefetch
+            return
+        
+        media_looked_at = set()
+        
+        to_render = []
+        
+        delay_base = HydrusTime.SecondiseMSFloat( CG.client_controller.new_options.GetInteger( 'media_viewer_prefetch_delay_base_ms' ) )
+        
+        num_to_go_back = CG.client_controller.new_options.GetInteger( 'media_viewer_prefetch_num_previous' )
+        num_to_go_forward = CG.client_controller.new_options.GetInteger( 'media_viewer_prefetch_num_next' )
+        
+        # Prefetch next images
+        for i in range( num_to_go_forward ):
+            
+            next_index = ( current_index + i + 1 ) % len( media_list )
+            next_media = media_list[ next_index ]
+            
+            if next_media in media_looked_at:
+                break
+            else:
+                media_looked_at.add( next_media )
+            
+            delay = delay_base * ( i + 1 )
+            to_render.append( ( next_media, delay ) )
+        
+        # Prefetch previous images
+        for i in range( num_to_go_back ):
+            
+            prev_index = ( current_index - i - 1 ) % len( media_list )
+            prev_media = media_list[ prev_index ]
+            
+            if prev_media in media_looked_at:
+                break
+            else:
+                media_looked_at.add( prev_media )
+            
+            delay = delay_base * 2 * ( i + 1 )
+            to_render.append( ( prev_media, delay ) )
+        
+        # Prefetch the images
+        images_cache = CG.client_controller.images_cache
+        
+        for ( media, delay ) in to_render:
+            
+            # Get the singleton media for each media object
+            singleton_media = media.GetDisplayMedia()
+            if singleton_media is None:
+                continue
+            
+            hash = singleton_media.GetHash()
+            mime = singleton_media.GetMime()
+            
+            if singleton_media.IsStaticImage() and ClientGUICanvasMedia.WeAreExpectingToLoadThisMediaFile( singleton_media.GetMediaResult(), self.CANVAS_TYPE ):
+                
+                if not images_cache.HasImageRenderer( hash ):
+                    
+                    # we do qt safe to make sure the job is cancelled if we are destroyed
+                    CG.client_controller.CallLaterQtSafe( self, delay, 'image pre-fetch', images_cache.PrefetchImageRenderer, singleton_media.GetMediaResult() )
+                
     
     def _SaveCurrentMediaViewTime( self ):
         
@@ -1818,6 +1894,11 @@ class CanvasPanel( Canvas ):
         
         Canvas.SetMedia( self, media, start_paused = start_paused )
         
+        # Trigger prefetch when media is set in preview pane
+        if media is not None:
+            print("testbest")
+            self._PrefetchNeighbours()
+        
     
     def SetSplitterHiddenStatus( self, is_hidden ):
         
@@ -2946,6 +3027,12 @@ class CanvasWithHovers( Canvas ):
                 
                 self._TryToCloseWindow()
                 
+            elif action == CAC.SIMPLE_FOCUS_TAB_AND_MEDIA:
+                
+                self._TryToShowPageThatLaunchedUs()
+                
+                self._TryToShowMediaThatLaunchedUs()
+                
             elif action == CAC.SIMPLE_SWITCH_BETWEEN_FULLSCREEN_BORDERLESS_AND_REGULAR_FRAMED_WINDOW:
                 
                 self.parentWidget().FullscreenSwitch()
@@ -3009,10 +3096,10 @@ def THREADCommitDuplicateResults( content_update_packages: list, pairs_info: lis
             have_published_job_status = True
             
         
-        num_done = i
+        num_done = i + 1
         
         job_status.SetStatusText( f'misc file updates: {HydrusNumbers.ValueRangeToPrettyString( num_done, num_to_do )}' )
-        job_status.SetGauge( num_done, num_to_do )
+        job_status.SetVariable( 'popup_gauge_1', ( num_done, num_to_do ) )
         
         CG.client_controller.WriteSynchronous( 'content_updates', content_update_package )
         
@@ -3027,7 +3114,7 @@ def THREADCommitDuplicateResults( content_update_packages: list, pairs_info: lis
             
         
         job_status.SetStatusText( f'decisions: {HydrusNumbers.ValueRangeToPrettyString( num_done, num_to_do )}' )
-        job_status.SetGauge( num_done, num_to_do )
+        job_status.SetVariable( 'popup_gauge_1', ( num_done, num_to_do ) )
         
         CG.client_controller.WriteSynchronous( 'duplicate_pair_status', block_of_pair_infos )
         
@@ -3043,12 +3130,11 @@ class CanvasFilterDuplicates( CanvasWithHovers ):
     
     showPairInPage = QC.Signal( list )
     
-    def __init__( self, parent, potential_duplicates_search_context: ClientPotentialDuplicatesSearchContext.PotentialDuplicatesSearchContext, duplicate_pair_sort_type: int, duplicate_pair_sort_asc: bool, filter_group_mode: bool ):
+    def __init__( self, parent, potential_duplicates_search_context: ClientPotentialDuplicatesSearchContext.PotentialDuplicatesSearchContext, duplicate_pair_sort_type: int, duplicate_pair_sort_asc: bool ):
         
         self._potential_duplicates_search_context = potential_duplicates_search_context
         self._duplicate_pair_sort_type = duplicate_pair_sort_type
         self._duplicate_pair_sort_asc = duplicate_pair_sort_asc
-        self._filter_group_mode = filter_group_mode
         
         location_context = self._potential_duplicates_search_context.GetFileSearchContext1().GetLocationContext()
         
@@ -3060,23 +3146,13 @@ class CanvasFilterDuplicates( CanvasWithHovers ):
         
         self._potential_duplicate_id_pairs_and_distances_still_to_search = ClientPotentialDuplicatesSearchContext.PotentialDuplicateIdPairsAndDistances( [] )
         
-        self._group_media_ids = set()
-        
         self._fetched_media_result_pairs_and_distances_to_process = ClientPotentialDuplicatesSearchContext.PotentialDuplicateMediaResultPairsAndDistances( [] )
         
         self._num_items_to_commit = 0
         self._content_update_packages_we_are_committing = []
         self._pair_infos_we_are_committing = []
         
-        if self._filter_group_mode:
-            
-            self._search_work_updater = self._InitialiseGroupSearchWorkUpdater()
-            
-        else:
-            
-            self._search_work_updater = self._InitialiseMixedSearchWorkUpdater()
-            
-        
+        self._search_work_updater = self._InitialiseSearchWorkUpdater()
         self._commit_work_updater = self._InitialiseCommitWorkUpdater()
         
         self._canvas_type = CC.CANVAS_MEDIA_VIEWER_DUPLICATES
@@ -3496,6 +3572,8 @@ class CanvasFilterDuplicates( CanvasWithHovers ):
             
             # ok randomise the order we'll do this guy, but only at the block level
             # we'll preserve order each block came in since we'll then keep db-proximal indices close together on each actual block fetch
+            
+            # a checkbox for the user to say 'choose different work with each launch'
             potential_duplicate_id_pairs_and_distances.RandomiseBlocks()
             
             return potential_duplicate_id_pairs_and_distances
@@ -3604,134 +3682,7 @@ class CanvasFilterDuplicates( CanvasWithHovers ):
         return ClientGUIAsync.AsyncQtUpdater( self, loading_callable, work_callable, publish_callable, pre_work_callable = pre_work_callable )
         
     
-    def _InitialiseGroupSearchWorkUpdater( self ):
-        
-        def loading_callable():
-            
-            pass
-            
-        
-        def pre_work_callable():
-            
-            if self._CurrentlyCommitting():
-                
-                raise HydrusExceptions.CancelledException()
-                
-            
-            if len( self._group_media_ids ) == 0:
-                
-                # we do not currently have any group to search
-                
-                if len( self._potential_duplicate_id_pairs_and_distances_still_to_search ) == 0:
-                    
-                    self._loading_text = 'No duplicate pairs to search!'
-                    
-                    raise HydrusExceptions.CancelledException()
-                    
-                else:
-                    
-                    value = len( self._potential_duplicate_id_pairs_and_distances ) - len( self._potential_duplicate_id_pairs_and_distances_still_to_search )
-                    range = len( self._potential_duplicate_id_pairs_and_distances )
-                    
-                    self._loading_text = f'{HydrusNumbers.ValueRangeToPrettyString(value, range)} pairs searched{HC.UNICODE_ELLIPSIS}'
-                    
-                
-                block_of_id_pairs_and_distances = self._potential_duplicate_id_pairs_and_distances_still_to_search.PopBlock()
-                
-            else:
-                
-                self._loading_text = f'Loading group{HC.UNICODE_ELLIPSIS}'
-                
-                block_of_id_pairs_and_distances = ClientPotentialDuplicatesSearchContext.PotentialDuplicateIdPairsAndDistances( [] )
-                
-            
-            self.update()
-            
-            return ( self._potential_duplicates_search_context, self._group_media_ids, self._potential_duplicate_id_pairs_and_distances, block_of_id_pairs_and_distances )
-            
-        
-        def work_callable( args ):
-            
-            ( potential_duplicates_search_context, group_media_ids, potential_duplicate_id_pairs_and_distances, block_of_id_pairs_and_distances ) = args
-            
-            potential_duplicate_media_result_pairs_and_distances = ClientPotentialDuplicatesSearchContext.PotentialDuplicateMediaResultPairsAndDistances( [] )
-            
-            if len( group_media_ids ) == 0:
-                
-                # ok let's find a group if poss
-                
-                probing_potential_duplicate_media_result_pairs_and_distances = CG.client_controller.Read( 'potential_duplicate_id_pairs_and_distances_fragmentary', potential_duplicates_search_context, block_of_id_pairs_and_distances )
-                
-                if len( probing_potential_duplicate_media_result_pairs_and_distances ) == 0:
-                    
-                    pass # no luck this time; make no changes and try again
-                    
-                else:
-                    
-                    # we found one
-                    pairs = list( probing_potential_duplicate_media_result_pairs_and_distances.GetPairs() )
-                    
-                    pair = random.choice( pairs )
-                    
-                    group_potential_duplicate_id_pairs_and_distances = potential_duplicate_id_pairs_and_distances.FilterWiderPotentialGroup( pair )
-                    
-                    group_media_ids = { media_id for pair in group_potential_duplicate_id_pairs_and_distances.GetRows() for media_id in pair }
-                    
-                
-            else:
-                
-                # ok we have a group; we want to re-fetch it
-                group_potential_duplicate_id_pairs_and_distances = potential_duplicate_id_pairs_and_distances.FilterWiderPotentialGroup( group_media_ids )
-                
-                potential_duplicate_media_result_pairs_and_distances = CG.client_controller.Read( 'potential_duplicate_media_result_pairs_and_distances_fragmentary', potential_duplicates_search_context, group_potential_duplicate_id_pairs_and_distances )
-                
-                if len( potential_duplicate_media_result_pairs_and_distances ) == 0:
-                    
-                    # this group is now exhausted; we need to fetch a new one
-                    
-                    group_media_ids = set()
-                    
-                
-            
-            return ( group_media_ids, potential_duplicate_media_result_pairs_and_distances )
-            
-        
-        def publish_callable( result ):
-            
-            ( self._group_media_ids, self._fetched_media_result_pairs_and_distances_to_process ) = result
-            
-            if len( self._group_media_ids ) == 0 and len( self._potential_duplicate_id_pairs_and_distances_still_to_search ) == 0:
-                
-                ClientGUIDialogsMessage.ShowInformation( self, 'All pairs have been filtered!' )
-                
-                CG.client_controller.pub( 'new_similar_files_potentials_search_numbers' )
-                
-                self._TryToCloseWindow()
-                
-                return
-                
-            
-            if len( self._fetched_media_result_pairs_and_distances_to_process ) > 0:
-                
-                self._fetched_media_result_pairs_and_distances_to_process.Sort( self._duplicate_pair_sort_type, self._duplicate_pair_sort_asc )
-                
-                self._batch_of_pairs_to_process = self._fetched_media_result_pairs_and_distances_to_process.GetPairs()
-                self._current_pair_index = 0
-                
-                self._fetched_media_result_pairs_and_distances_to_process = ClientPotentialDuplicatesSearchContext.PotentialDuplicateMediaResultPairsAndDistances( [] )
-                
-                self._ShowCurrentPair()
-                
-            else:
-                
-                self._DoSearchWork()
-                
-            
-        
-        return ClientGUIAsync.AsyncQtUpdater( self, loading_callable, work_callable, publish_callable, pre_work_callable = pre_work_callable )
-        
-    
-    def _InitialiseMixedSearchWorkUpdater( self ):
+    def _InitialiseSearchWorkUpdater( self ):
         
         def loading_callable():
             
@@ -3772,7 +3723,7 @@ class CanvasFilterDuplicates( CanvasWithHovers ):
             
             no_more_than = CG.client_controller.new_options.GetInteger( 'duplicate_filter_max_batch_size' )
             
-            potential_duplicate_media_result_pairs_and_distances = CG.client_controller.Read( 'potential_duplicate_media_result_pairs_and_distances_fragmentary', potential_duplicates_search_context, block_of_id_pairs_and_distances, no_more_than = no_more_than )
+            potential_duplicate_media_result_pairs_and_distances = CG.client_controller.Read( 'potential_duplicate_pairs_fragmentary', potential_duplicates_search_context, block_of_id_pairs_and_distances, no_more_than = no_more_than )
             
             return potential_duplicate_media_result_pairs_and_distances
             
@@ -3852,8 +3803,10 @@ class CanvasFilterDuplicates( CanvasWithHovers ):
         
         self._loading_text = 'Loading more pairs--please wait.'
         
+        # TODO: if I want to sort by similarity, I can pre-sort this by distance right now!!
+        # or indeed when we initialise this guy but whatever
+        # to grab stable/random groups, we can choose to randomise blocks or not, also
         self._potential_duplicate_id_pairs_and_distances_still_to_search = self._potential_duplicate_id_pairs_and_distances.Duplicate()
-        
         self._fetched_media_result_pairs_and_distances_to_process = ClientPotentialDuplicatesSearchContext.PotentialDuplicateMediaResultPairsAndDistances( [] )
         
         self.ClearMedia()
@@ -3882,51 +3835,90 @@ class CanvasFilterDuplicates( CanvasWithHovers ):
     
     def _PrefetchNeighbours( self ):
         
-        if self._current_media is None:
-            
+        # Get the media results panel to access the media list
+        # The preview pane doesn't have its own media list, but the media results panel does
+        parent = self.parent()
+        
+        # Navigate up to find the media results panel
+        while parent is not None:
+            if hasattr(parent, '_media_panel') and parent._media_panel is not None:
+                media_panel = parent._media_panel
+                break
+            parent = parent.parent()
+        else:
+            # Couldn't find the media panel, can't prefetch
             return
-            
         
-        other_media: ClientMedia.MediaSingleton = self._media_list.GetNext( self._current_media )
+        # Get the media list from the media panel
+        if not hasattr(media_panel, '_sorted_media') or self._current_media is None:
+            return
         
-        media_results_to_prefetch = [ other_media.GetMediaResult() ]
+        media_list = media_panel._sorted_media
         
-        duplicate_filter_prefetch_num_pairs = CG.client_controller.new_options.GetInteger( 'duplicate_filter_prefetch_num_pairs' )
+        # Find the current media in the list
+        try:
+            current_index = media_list.index(self._current_media)
+        except ValueError:
+            # Current media not in list, can't prefetch
+            return
         
-        if duplicate_filter_prefetch_num_pairs > 0:
-            
-            # this isn't clever enough to handle pending skip logic, but that's fine
-            
-            start_pos = self._current_pair_index + 1
-            
-            pairs_to_do = self._batch_of_pairs_to_process[ start_pos : start_pos + duplicate_filter_prefetch_num_pairs ]
-            
-            for pair in pairs_to_do:
-                
-                media_results_to_prefetch.extend( pair )
-                
-            
+        media_looked_at = set()
+        
+        to_render = []
         
         delay_base = HydrusTime.SecondiseMSFloat( CG.client_controller.new_options.GetInteger( 'media_viewer_prefetch_delay_base_ms' ) )
         
+        num_to_go_back = CG.client_controller.new_options.GetInteger( 'media_viewer_prefetch_num_previous' )
+        num_to_go_forward = CG.client_controller.new_options.GetInteger( 'media_viewer_prefetch_num_next' )
+        
+        # Prefetch next images
+        for i in range( num_to_go_forward ):
+            
+            next_index = ( current_index + i + 1 ) % len( media_list )
+            next_media = media_list[ next_index ]
+            
+            if next_media in media_looked_at:
+                break
+            else:
+                media_looked_at.add( next_media )
+            
+            delay = delay_base * ( i + 1 )
+            to_render.append( ( next_media, delay ) )
+        
+        # Prefetch previous images
+        for i in range( num_to_go_back ):
+            
+            prev_index = ( current_index - i - 1 ) % len( media_list )
+            prev_media = media_list[ prev_index ]
+            
+            if prev_media in media_looked_at:
+                break
+            else:
+                media_looked_at.add( prev_media )
+            
+            delay = delay_base * 2 * ( i + 1 )
+            to_render.append( ( prev_media, delay ) )
+        
+        # Prefetch the images
         images_cache = CG.client_controller.images_cache
         
-        for ( i, media_result ) in enumerate( media_results_to_prefetch ):
+        for ( media, delay ) in to_render:
             
-            delay = i * delay_base
+            # Get the singleton media for each media object
+            singleton_media = media.GetDisplayMedia()
+            if singleton_media is None:
+                continue
             
-            hash = media_result.GetHash()
-            mime = media_result.GetMime()
+            hash = singleton_media.GetHash()
+            mime = singleton_media.GetMime()
             
-            if media_result.IsStaticImage() and ClientGUICanvasMedia.WeAreExpectingToLoadThisMediaFile( media_result, self.CANVAS_TYPE ):
+            if singleton_media.IsStaticImage() and ClientGUICanvasMedia.WeAreExpectingToLoadThisMediaFile( singleton_media.GetMediaResult(), self.CANVAS_TYPE ):
                 
                 if not images_cache.HasImageRenderer( hash ):
                     
-                    CG.client_controller.CallLaterQtSafe( self, delay, 'image pre-fetch', images_cache.PrefetchImageRenderer, media_result )
-                    
+                    # we do qt safe to make sure the job is cancelled if we are destroyed
+                    CG.client_controller.CallLaterQtSafe( self, delay, 'image pre-fetch', images_cache.PrefetchImageRenderer, singleton_media.GetMediaResult() )
                 
-            
-        
     
     def _ProcessPair( self, duplicate_type, delete_a = False, delete_b = False, duplicate_content_merge_options = None ):
         
@@ -4243,24 +4235,7 @@ class CanvasFilterDuplicates( CanvasWithHovers ):
                             
                         
                     
-                    if we_saw_a_non_auto_skip:
-                        
-                        if self._filter_group_mode:
-                            
-                            text = 'You appear to have skipped this whole group. Do you want to load up a different one?'
-                            
-                            result = ClientGUIDialogsQuick.GetYesNo( self, text )
-                            
-                            if result == QW.QDialog.DialogCode.Accepted:
-                                
-                                self._group_media_ids = set()
-                                
-                                self._potential_duplicate_id_pairs_and_distances = ClientPotentialDuplicatesSearchContext.PotentialDuplicateIdPairsAndDistances( [] )
-                                self._potential_duplicate_id_pairs_and_distances_initialised = False
-                                
-                            
-                        
-                    else:
+                    if not we_saw_a_non_auto_skip:
                         
                         CG.client_controller.pub( 'new_similar_files_potentials_search_numbers' )
                         
@@ -4627,6 +4602,7 @@ class CanvasMediaList( CanvasWithHovers ):
     def _PrefetchNeighbours( self ):
         
         media_looked_at = set()
+        print("zzzsx")
         
         to_render = []
         
@@ -4713,6 +4689,16 @@ class CanvasMediaList( CanvasWithHovers ):
     def _ShowPrevious( self ):
         
         self.SetMedia( self._media_list.GetPrevious( self._current_media ) )
+        
+    
+    def _ShowRandom( self ):
+        
+        self.SetMedia( self._media_list.GetRandom( self._current_media ) )
+        
+    
+    def _UndoRandom( self ):
+        
+        self.SetMedia( self._media_list.UndoRandom( self._current_media ) )
         
     
     def _StartSlideshow( self, interval: float ):
@@ -4908,7 +4894,7 @@ class CanvasMediaListFilterArchiveDelete( CanvasMediaList ):
         
         if first_media is not None:
             
-            QP.CallAfter( self.SetMedia, first_media ) # don't set this until we have a size > (20, 20)!
+            CG.client_controller.CallAfter( self, self.SetMedia, first_media ) # don't set this until we have a size > (20, 20)!
             
         
     
@@ -5318,6 +5304,18 @@ class CanvasMediaListNavigable( CanvasMediaList ):
                 
                 self.userChangedMedia.emit()
                 
+            elif action == CAC.SIMPLE_VIEW_RANDOM:
+                
+                self._ShowRandom()
+                
+                self.userChangedMedia.emit()
+                
+            elif action == CAC.SIMPLE_UNDO_RANDOM:
+                
+                self._UndoRandom()
+                
+                self.userChangedMedia.emit()
+                
             else:
                 
                 command_processed = False
@@ -5414,7 +5412,7 @@ class CanvasMediaListBrowser( CanvasMediaListNavigable ):
         
         if first_media is not None:
             
-            QP.CallAfter( self.SetMedia, first_media ) # don't set this until we have a size > (20, 20)!
+            CG.client_controller.CallAfter( self, self.SetMedia, first_media ) # don't set this until we have a size > (20, 20)!
             
         
         CG.client_controller.sub( self, 'AddMediaResults', 'add_media_results' )
