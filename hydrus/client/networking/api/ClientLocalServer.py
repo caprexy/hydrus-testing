@@ -186,7 +186,7 @@ class HydrusServiceClientAPI( HydrusClientService ):
         manage_popups.putChild( b'add_popup', ClientLocalServerResourcesManagePopups.HydrusResourceClientAPIRestrictedManagePopupsAddPopup( self._service, self._client_requests_domain ) )
         manage_popups.putChild( b'update_popup', ClientLocalServerResourcesManagePopups.HydrusResourceClientAPIRestrictedManagePopupsUpdatePopup( self._service, self._client_requests_domain ) )
         
-        manage_subscriptions = NoResource()
+        manage_subscriptions = notFound()
         
         root.putChild( b'manage_subscriptions', manage_subscriptions )
         

@@ -77,13 +77,16 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
         
         media_view[ HC.GENERAL_APPLICATION ] = ( CC.MEDIA_VIEWER_ACTION_SHOW_OPEN_EXTERNALLY_BUTTON, media_start_paused, media_start_with_embed, CC.MEDIA_VIEWER_ACTION_SHOW_OPEN_EXTERNALLY_BUTTON, preview_start_paused, preview_start_with_embed, null_zoom_info )
         
-        media_view[ HC.GENERAL_APPLICATION_ARCHIVE ] = ( CC.MEDIA_VIEWER_ACTION_SHOW_OPEN_EXTERNALLY_BUTTON, media_start_paused, media_start_with_embed, CC.MEDIA_VIEWER_ACTION_SHOW_OPEN_EXTERNALLY_BUTTON, preview_start_paused, preview_start_with_embed, null_zoom_info )
+        media_view[ HC.GENERAL_APPLICATION_ARCHIVE ] = ( CC.MEDIA_VIEWER_ACTION_SHOW_WITH_NATIVE, media_start_paused, media_start_with_embed, CC.MEDIA_VIEWER_ACTION_SHOW_WITH_NATIVE, preview_start_paused, preview_start_with_embed, image_zoom_info )
         
         media_view[ HC.GENERAL_IMAGE_PROJECT ] = ( CC.MEDIA_VIEWER_ACTION_SHOW_OPEN_EXTERNALLY_BUTTON, media_start_paused, media_start_with_embed, CC.MEDIA_VIEWER_ACTION_SHOW_OPEN_EXTERNALLY_BUTTON, preview_start_paused, preview_start_with_embed, null_zoom_info )
         
         media_view[ HC.APPLICATION_PSD ] = ( CC.MEDIA_VIEWER_ACTION_SHOW_WITH_NATIVE, media_start_paused, media_start_with_embed, CC.MEDIA_VIEWER_ACTION_SHOW_OPEN_EXTERNALLY_BUTTON, preview_start_paused, preview_start_with_embed, image_zoom_info )
 
         media_view[ HC.APPLICATION_KRITA ] = ( CC.MEDIA_VIEWER_ACTION_SHOW_WITH_NATIVE, media_start_paused, media_start_with_embed, CC.MEDIA_VIEWER_ACTION_SHOW_OPEN_EXTERNALLY_BUTTON, preview_start_paused, preview_start_with_embed, image_zoom_info )
+        
+        # Explicitly set CBZ files to use native viewer with thumbnails in preview
+        media_view[ HC.APPLICATION_CBZ ] = ( CC.MEDIA_VIEWER_ACTION_SHOW_WITH_NATIVE, media_start_paused, media_start_with_embed, CC.MEDIA_VIEWER_ACTION_SHOW_WITH_NATIVE, preview_start_paused, preview_start_with_embed, image_zoom_info )
         
         media_view[ HC.ANIMATION_WEBP ] = ( CC.MEDIA_VIEWER_ACTION_SHOW_WITH_NATIVE, media_start_paused, media_start_with_embed, CC.MEDIA_VIEWER_ACTION_SHOW_WITH_NATIVE, preview_start_paused, preview_start_with_embed, gif_zoom_info )
         
@@ -96,7 +99,8 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
         
         if mime in self._dictionary[ 'media_view' ]:
             
-            return self._dictionary[ 'media_view' ][ mime ]
+            result = self._dictionary[ 'media_view' ][ mime ]
+            return result
             
         else:
             
@@ -114,7 +118,8 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
                 self._dictionary[ 'media_view' ] = self._GetDefaultMediaViewOptions()
                 
             
-            return self._dictionary[ 'media_view' ][ general_mime_type ]
+            result = self._dictionary[ 'media_view' ][ general_mime_type ]
+            return result
             
         
     

@@ -255,6 +255,9 @@ def GetShowAction( media_result: ClientMediaResult.MediaResult, canvas_type: int
     
     mime = media_result.GetMime()
     
+    if mime == HC.APPLICATION_CBZ:
+        print( f"[DEBUG CBZ] GetShowAction called for CBZ mime: {mime}, canvas_type: {canvas_type}" )
+    
     if mime not in HC.ALLOWED_MIMES: # stopgap to catch a collection or application_unknown due to unusual import order/media moving
         
         return bad_result
@@ -262,12 +265,21 @@ def GetShowAction( media_result: ClientMediaResult.MediaResult, canvas_type: int
     
     if canvas_type == CC.CANVAS_PREVIEW:
         
+        if mime == HC.APPLICATION_CBZ:
+            print( f"[DEBUG CBZ] GetShowAction calling GetPreviewShowAction for canvas_type CANVAS_PREVIEW" )
+        
         action =  CG.client_controller.new_options.GetPreviewShowAction( mime )
         
     else:
         
+        if mime == HC.APPLICATION_CBZ:
+            print( f"[DEBUG CBZ] GetShowAction calling GetMediaShowAction for canvas_type {canvas_type}" )
+        
         action = CG.client_controller.new_options.GetMediaShowAction( mime )
         
+    
+    if mime == HC.APPLICATION_CBZ:
+        print( f"[DEBUG CBZ] GetShowAction returning action: {action}" )
     
     return action
     
