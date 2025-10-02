@@ -40,7 +40,8 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
         
         from hydrus.client.gui.canvas import ClientGUIMPV
         
-        if ClientGUIMPV.MPV_IS_AVAILABLE:
+        # we may permit mpv testing in macOS, but we won't default to it even if it seems ok
+        if ClientGUIMPV.MPV_IS_AVAILABLE and not HC.PLATFORM_MACOS:
             
             video_action = CC.MEDIA_VIEWER_ACTION_SHOW_WITH_MPV
             audio_action = CC.MEDIA_VIEWER_ACTION_SHOW_WITH_MPV
@@ -150,7 +151,8 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
             'only_show_delete_from_all_local_domains_when_filtering' : False,
             'use_system_ffmpeg' : False,
             'elide_page_tab_names' : True,
-            'maintain_similar_files_duplicate_pairs_during_idle' : False,
+            'maintain_similar_files_duplicate_pairs_during_active' : False,
+            'maintain_similar_files_duplicate_pairs_during_idle' : True,
             'show_namespaces' : True,
             'show_number_namespaces' : True,
             'show_subtag_number_namespaces' : True,
@@ -193,6 +195,7 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
             'pause_all_gallery_searches' : False,
             'popup_message_force_min_width' : False,
             'always_show_iso_time' : False,
+            'do_not_do_chmod_mode' : False,
             'confirm_multiple_local_file_services_move' : True,
             'confirm_multiple_local_file_services_copy' : True,
             'use_advanced_file_deletion_dialog' : False,
@@ -491,8 +494,14 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
             'system_busy_cpu_percent' : 50,
             'human_bytes_sig_figs' : 3,
             'ms_to_wait_between_physical_file_deletes' : 600,
-            'potential_duplicates_search_work_time_ms' : 500,
-            'potential_duplicates_search_rest_percentage' : 100,
+            'potential_duplicates_search_work_time_ms_active' : 100,
+            'potential_duplicates_search_work_time_ms_idle' : 5000,
+            'potential_duplicates_search_rest_percentage_active' : 1900,
+            'potential_duplicates_search_rest_percentage_idle' : 50,
+            'duplicates_auto_resolution_work_time_ms_active' : 100,
+            'duplicates_auto_resolution_work_time_ms_idle' : 1000,
+            'duplicates_auto_resolution_rest_percentage_active' : 900,
+            'duplicates_auto_resolution_rest_percentage_idle' : 100,
             'repository_processing_work_time_ms_very_idle' : 30000,
             'repository_processing_rest_percentage_very_idle' : 3,
             'repository_processing_work_time_ms_idle' : 10000,
@@ -552,6 +561,7 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
             'num_recent_tags' : 20,
             'duplicate_background_switch_intensity_a' : 0,
             'duplicate_background_switch_intensity_b' : 3,
+            'duplicate_filter_auto_commit_batch_size' : 1,
             'last_review_bandwidth_search_distance' : 7 * 86400,
             'file_viewing_statistics_media_min_time_ms' : 2 * 1000,
             'file_viewing_statistics_media_max_time_ms' : 600 * 1000,

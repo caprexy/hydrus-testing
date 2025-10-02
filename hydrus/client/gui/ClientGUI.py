@@ -80,6 +80,7 @@ from hydrus.client.gui.panels import ClientGUIManageOptionsPanel
 from hydrus.client.gui.panels import ClientGUIScrolledPanels
 from hydrus.client.gui.panels import ClientGUIScrolledPanelsEdit
 from hydrus.client.gui.panels import ClientGUIScrolledPanelsReview
+from hydrus.client.gui.panels import ClientGUIURLClass
 from hydrus.client.gui.parsing import ClientGUIParsing
 from hydrus.client.gui.parsing import ClientGUIParsingLegacy
 from hydrus.client.gui.services import ClientGUIClientsideServices
@@ -94,6 +95,56 @@ from hydrus.client.networking import ClientNetworkingFunctions
 from hydrus.client.parsing import ClientParsing
 
 MENU_ORDER = [ 'file', 'undo', 'pages', 'database', 'network', 'services', 'tags', 'pending', 'help' ]
+
+def CrashTheProgram( win: QW.QWidget ):
+    
+    def crashtime_nice():
+        
+        os.abort()
+        
+    
+    def crashtime_not_nice():
+        
+        for i in range( 100 ):
+            
+            CG.client_controller.gui.repaint()
+            
+            time.sleep( 0.1 )
+            
+        
+    
+    message = 'u wot mate I\'ll hook u in the gabber'
+    
+    yes_tuples = []
+    
+    yes_tuples.append( ( 'nice crash', True ) )
+    yes_tuples.append( ( 'not a nice crash', False ) )
+    
+    try:
+        
+        result = ClientGUIDialogsQuick.GetYesYesNo( win, message, yes_tuples = yes_tuples, no_label = 'forget it' )
+        
+    except HydrusExceptions.CancelledException:
+        
+        return
+        
+    
+    if result:
+        
+        crashtime_nice()
+        
+    else:
+        
+        CG.client_controller.CallToThread( crashtime_not_nice )
+        
+    
+
+def TurnOffCrashReporting():
+    
+    from hydrus.core import HydrusLogger
+    
+    HydrusLogger.turn_off_faulthandler()
+    
 
 def GetTagServiceKeyForMaintenance( win: QW.QWidget ):
     
@@ -498,6 +549,8 @@ class FrameGUI( CAC.ApplicationCommandProcessorMixin, ClientGUITopLevelWindows.M
         self._did_a_backup_this_session = False
         
         self._notebook = ClientGUIPages.PagesNotebook( self, 'top page notebook' )
+        
+        self._page_nav_history = ClientGUIPages.PagesHistory()
         
         self._currently_uploading_pending = set()
         
@@ -1159,7 +1212,7 @@ class FrameGUI( CAC.ApplicationCommandProcessorMixin, ClientGUITopLevelWindows.M
             
             if result == 'file':
                 
-                with QP.FileDialog( self, 'select where to save content', default_filename = 'result.html', acceptMode = QW.QFileDialog.AcceptMode.AcceptSave, fileMode = QW.QFileDialog.FileMode.AnyFile ) as f_dlg:
+                with QP.FileDialog( self, 'select where to save content', default_filename = 'output.txt', acceptMode = QW.QFileDialog.AcceptMode.AcceptSave, fileMode = QW.QFileDialog.FileMode.AnyFile ) as f_dlg:
                     
                     if f_dlg.exec() == QW.QDialog.DialogCode.Accepted:
                         
@@ -1205,7 +1258,7 @@ class FrameGUI( CAC.ApplicationCommandProcessorMixin, ClientGUITopLevelWindows.M
                 job_status.FinishAndDismiss( seconds = 3 )
                 
             
-            QP.CallAfter( qt_code, network_job )
+            CG.client_controller.CallAfter( self, qt_code, network_job )
             
         
         try:
@@ -2317,6 +2370,7 @@ ATTACH "client.mappings.db" as external_mappings;'''
         self._menu_updater_undo = self._InitialiseMenubarGetMenuUpdaterUndo()
         
         self._menu_updater_pages_count = ClientGUIAsync.FastThreadToGUIUpdater( self, self._UpdateMenuPagesCount )
+        self._menu_updater_pages_history = ClientGUIAsync.FastThreadToGUIUpdater( self, self._UpdateMenuPagesHistory )
         
         self._boned_updater = self._InitialiseMenubarGetBonesUpdater()
         self._file_history_updater = self._InitialiseMenubarGetFileHistoryUpdater()
@@ -3422,17 +3476,20 @@ ATTACH "client.mappings.db" as external_mappings;'''
         
         profiling = ClientGUIMenus.GenerateMenu( debug_menu )
         
-        profile_mode_message = 'If something is running slow, you can turn on profile mode to have hydrus gather information on how long many jobs take to run.'
+        profile_mode_message = 'If something is running slow, you can turn on a profile mode to have hydrus gather information on it. You probably want "db" profile mode, but if it seems to be lag related to dialog spawning or similar, you might like to try the "ui" mode.'
         profile_mode_message += '\n' * 2
         profile_mode_message += 'Turn the mode on, do the slow thing for a bit, and then turn it off. In your database directory will be a new profile log, which is really helpful for hydrus dev to figure out what is running slow for you and how to fix it.'
         profile_mode_message += '\n' * 2
-        profile_mode_message += 'A new Query Planner mode also makes very detailed database analysis. This is an alternate profiling mode hydev is testing.'
+        profile_mode_message += 'The Query Planner mode makes detailed database analysis of specific database queries. This is sometimes useful to hydev, but he will usually ask for it specifically.'
         profile_mode_message += '\n' * 2
         profile_mode_message += 'More information is available in the help, under \'reducing lag\'.'
         
         ClientGUIMenus.AppendMenuItem( profiling, 'what is this?', 'Show profile info.', ClientGUIDialogsMessage.ShowInformation, self, profile_mode_message )
-        ClientGUIMenus.AppendMenuCheckItem( profiling, 'profile mode', 'Run detailed \'profiles\'.', HG.profile_mode, CG.client_controller.FlipProfileMode )
-        ClientGUIMenus.AppendMenuCheckItem( profiling, 'query planner mode', 'Run detailed \'query plans\'.', HG.query_planner_mode, CG.client_controller.FlipQueryPlannerMode )
+        self._profile_mode_client_api_menu_item = ClientGUIMenus.AppendMenuCheckItem( profiling, 'profile mode (client api)', 'Run detailed \'profiles\' on Client API jobs.', HydrusProfiling.IsProfileMode( 'client_api' ), self.FlipProfileMode, 'client_api' )
+        self._profile_mode_db_menu_item = ClientGUIMenus.AppendMenuCheckItem( profiling, 'profile mode (db)', 'Run detailed \'profiles\' on db jobs.', HydrusProfiling.IsProfileMode( 'db' ), self.FlipProfileMode, 'db' )
+        self._profile_mode_threads_menu_item = ClientGUIMenus.AppendMenuCheckItem( profiling, 'profile mode (threads)', 'Run detailed \'profiles\' on background threaded tasks.', HydrusProfiling.IsProfileMode( 'threads' ), self.FlipProfileMode, 'threads' )
+        self._profile_mode_ui_menu_item = ClientGUIMenus.AppendMenuCheckItem( profiling, 'profile mode (ui)', 'Run detailed \'profiles\' on some Qt jobs.', HydrusProfiling.IsProfileMode( 'ui' ), self.FlipProfileMode, 'ui' )
+        ClientGUIMenus.AppendMenuCheckItem( profiling, 'query planner mode', 'Run detailed \'query plans\'.', HydrusProfiling.query_planner_mode, CG.client_controller.FlipQueryPlannerMode )
         
         ClientGUIMenus.AppendMenu( debug_menu, profiling, 'profiling' )
         
@@ -3545,10 +3602,16 @@ ATTACH "client.mappings.db" as external_mappings;'''
         ClientGUIMenus.AppendMenuItem( tests, 'run the client api test', 'Run hydrus_dev\'s weekly Client API Test. Guaranteed to work and not mess up your session, ha ha.', self._RunClientAPITest )
         ClientGUIMenus.AppendMenuItem( tests, 'run the server test on fresh server', 'This will try to initialise an already running server.', self._RunServerTest )
         ClientGUIMenus.AppendSeparator( tests )
+        ClientGUIMenus.AppendMenuItem( tests, 'run the visual duplicates tuning suite', 'Run some stats on some example files using the visual duplicates system.', self._RunVisualDuplicatesTuningSuite )
+        ClientGUIMenus.AppendSeparator( tests )
         ClientGUIMenus.AppendMenuCheckItem( tests, 'fake petition mode', 'Fill the petition panels with fake local data for testing.', HG.fake_petition_mode, self._SwitchBoolean, 'fake_petition_mode' )
         ClientGUIMenus.AppendSeparator( tests )
         ClientGUIMenus.AppendMenuItem( tests, 'do self-sigterm', 'Test a sigterm call for fast, non-ui-originating shutdown.', CG.client_controller.DoSelfSigterm )
         ClientGUIMenus.AppendMenuItem( tests, 'do self-sigterm (fake)', 'Test a sigterm call for fast, non-ui-originating shutdown.', CG.client_controller.DoSelfSigtermFake )
+        ClientGUIMenus.AppendSeparator( tests )
+        ClientGUIMenus.AppendMenuItem( tests, 'turn off faulthandler crash logging', 'Disable the python crash logging so you can use WER or Linux Dumps for your own debugging situation.', TurnOffCrashReporting )
+        ClientGUIMenus.AppendSeparator( tests )
+        ClientGUIMenus.AppendMenuItem( tests, 'induce a program crash', 'Crash the program to test a crash dumping/debugging routine.', CrashTheProgram, self )
         
         ClientGUIMenus.AppendMenu( debug_menu, tests, 'tests, do not touch' )
         
@@ -3688,6 +3751,14 @@ ATTACH "client.mappings.db" as external_mappings;'''
         self._menubar_pages_page_count = ClientGUIMenus.AppendMenuLabel( menu, 'initialising', 'You have this many pages open.' )
         
         self._menubar_pages_session_weight = ClientGUIMenus.AppendMenuItem( menu, 'initialising', 'Your session is this heavy.', self._ShowPageWeightInfo )
+        
+        ClientGUIMenus.AppendSeparator( menu )
+        
+        self._page_nav_history_menu = ClientGUIMenus.GenerateMenu( menu )
+        
+        ClientGUIMenus.AppendMenuLabel( self._page_nav_history_menu, 'no tab history', 'Your page history is currently empty.', None, True )
+        
+        ClientGUIMenus.AppendMenu( menu, self._page_nav_history_menu, 'history' )
         
         ClientGUIMenus.AppendSeparator( menu )
         
@@ -5016,7 +5087,7 @@ ATTACH "client.mappings.db" as external_mappings;'''
             
             url_classes = domain_manager.GetURLClasses()
             
-            panel = ClientGUIDownloaders.EditURLClassesPanel( dlg, url_classes )
+            panel = ClientGUIURLClass.EditURLClassesPanel( dlg, url_classes )
             
             dlg.SetPanel( panel )
             
@@ -5416,7 +5487,7 @@ ATTACH "client.mappings.db" as external_mappings;'''
         
         if result == QW.QDialog.DialogCode.Accepted:
             
-            self._controller.Write( 'regenerate_similar_files' )
+            self._controller.Write( 'regenerate_similar_files_tree' )
             
         
     
@@ -6428,7 +6499,7 @@ ATTACH "client.mappings.db" as external_mappings;'''
             
             HydrusData.ShowText( 'Admin service initialised.' )
             
-            QP.CallAfter( ClientGUIFrames.ShowKeys, 'access', (access_key,) )
+            CG.client_controller.CallAfter( self, ClientGUIFrames.ShowKeys, 'access', ( access_key, ) )
             
             #
             
@@ -6476,6 +6547,29 @@ ATTACH "client.mappings.db" as external_mappings;'''
             
             self._controller.CallToThread( do_it )
             
+        
+    
+    def _RunVisualDuplicatesTuningSuite( self ):
+        
+        text = 'Turn back, do not proceed, click "no" NOW.'
+        
+        result = ClientGUIDialogsQuick.GetYesNo( self, text )
+        
+        if result != QW.QDialog.DialogCode.Accepted:
+            
+            return
+            
+        
+        from hydrus.client.files.images import ClientVisualDataTuningSuite
+        
+        test_dir = QW.QFileDialog.getExistingDirectory( self, '', '' )
+        
+        if test_dir == '':
+            
+            return
+            
+        
+        ClientVisualDataTuningSuite.RunTuningSuite( test_dir )
         
     
     def _SaveSplitterPositions( self ):
@@ -6970,6 +7064,38 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
         ClientGUIMenus.SetMenuItemLabel( self._menubar_pages_session_weight, 'total session weight: {}'.format( HydrusNumbers.ToHumanInt( total_active_weight ) ) )
         
     
+    def _UpdateMenuPagesHistory( self ):
+        
+        self._page_nav_history_menu.clear()
+        
+        low_page = self._notebook.GetCurrentMediaPage()
+        
+        self.RefreshPageHistoryMenuClean()
+        
+        if low_page is not None:
+            
+            self._page_nav_history.AddPage( low_page )
+            
+        
+        for i, ( page_key, page_name ) in enumerate( reversed( self._page_nav_history.GetHistory() ) ):
+            
+            if i > 99: #let's set a maximum size of history to be displayed in the menu
+                
+                break
+                
+            
+            history_menuitem = ClientGUIMenus.AppendMenuItem( self._page_nav_history_menu, '{}: {}'.format( i + 1, page_name ), 'Activate this tab from your viewing history.', CG.client_controller.gui.ShowPage, page_key )
+            
+            if i == 0:
+                
+                font = history_menuitem.font()
+                font.setBold( True )
+                history_menuitem.setFont( font )
+                
+            
+        
+    
+    
     def _UpdateSystemTrayIcon( self, currently_booting = False ):
         
         if not ClientGUISystemTray.SystemTrayAvailable() or ( not (HC.PLATFORM_WINDOWS or HC.PLATFORM_MACOS ) and not CG.client_controller.new_options.GetBoolean( 'advanced_mode' ) ):
@@ -7363,16 +7489,7 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
                 
                 try:
                     
-                    if HG.profile_mode:
-                        
-                        summary = 'Profiling animation timer: ' + repr( window )
-                        
-                        HydrusProfiling.Profile( summary, 'window.TIMERAnimationUpdate()', globals(), locals(), min_duration_ms = HG.ui_timer_profile_min_job_time_ms )
-                        
-                    else:
-                        
-                        window.TIMERAnimationUpdate()
-                        
+                    window.TIMERAnimationUpdate()
                     
                 except Exception:
                     
@@ -7431,6 +7548,16 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
         self._UpdateSystemTrayIcon()
         
         self._menu_updater_network.update()
+        
+    
+    def FlipProfileMode( self, name ):
+        
+        HydrusProfiling.FlipProfileMode( name )
+        
+        self._profile_mode_client_api_menu_item.setChecked( HydrusProfiling.IsProfileMode( 'client_api' ) )
+        self._profile_mode_db_menu_item.setChecked( HydrusProfiling.IsProfileMode( 'db' ) )
+        self._profile_mode_threads_menu_item.setChecked( HydrusProfiling.IsProfileMode( 'threads' ) )
+        self._profile_mode_ui_menu_item.setChecked( HydrusProfiling.IsProfileMode( 'ui' ) )
         
     
     def FlipSubscriptionsPaused( self ):
@@ -7746,6 +7873,7 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
         
         self._controller.ClosePageKeys( page.GetPageKeys() )
         
+        self._menu_updater_pages_history.Update()
         self._menu_updater_pages.update()
         self._menu_updater_undo.update()
         
@@ -7957,7 +8085,7 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
                 
             elif action == CAC.SIMPLE_GLOBAL_PROFILE_MODE_FLIP:
                 
-                CG.client_controller.FlipProfileMode()
+                self.FlipProfileMode( 'db' )
                 
             elif action == CAC.SIMPLE_GLOBAL_FORCE_ANIMATION_SCANBAR_SHOW:
                 
@@ -8122,6 +8250,18 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
             
         
         page.RefreshQuery()
+        
+    
+    def RefreshPageHistoryMenu( self ):
+        
+        self._menu_updater_pages_history.Update()
+        
+    
+    def RefreshPageHistoryMenuClean( self ):
+        
+        open_pages = self._notebook.GetPageKeys()
+        
+        self._page_nav_history.CleanPages( open_pages )
         
     
     def RefreshStatusBar( self ):
@@ -8304,16 +8444,7 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
         
         if page is not None:
             
-            if HG.profile_mode:
-                
-                summary = 'Profiling page timer: ' + repr( page )
-                
-                HydrusProfiling.Profile( summary, 'page.REPEATINGPageUpdate()', globals(), locals(), min_duration_ms = HG.ui_timer_profile_min_job_time_ms )
-                
-            else:
-                
-                page.REPEATINGPageUpdate()
-                
+            page.REPEATINGPageUpdate()
             
         
         if len( self._pending_modal_job_statuses ) > 0:
@@ -8352,16 +8483,7 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
             
             try:
                 
-                if HG.profile_mode:
-                    
-                    summary = 'Profiling ui update timer: ' + repr( window )
-                    
-                    HydrusProfiling.Profile( summary, 'window.TIMERUIUpdate()', globals(), locals(), min_duration_ms = HG.ui_timer_profile_min_job_time_ms )
-                    
-                else:
-                    
-                    window.TIMERUIUpdate()
-                    
+                window.TIMERUIUpdate()
                 
             except Exception as e:
                 
@@ -8726,7 +8848,7 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
                 
             
         
-        QP.CallAfter( self._controller.Exit )
+        CG.client_controller.CallAfter( self, self._controller.Exit )
         
     
     def TryToOpenManageServicesForAutoAccountCreation( self, service_key: bytes ):

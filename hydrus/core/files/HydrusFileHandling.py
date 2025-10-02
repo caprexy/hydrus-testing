@@ -133,17 +133,28 @@ def PrintMoreThumbErrorInfo( e: Exception, message, extra_description: typing.Op
 
 def GenerateThumbnailNumPy( path, target_resolution, mime, duration_ms, num_frames, percentage_in = 35, extra_description = None ):
     
-    if mime == HC.APPLICATION_CBZ:
+    if mime == HC.APPLICATION_CBZ or mime == HC.APPLICATION_EPUB:
         
         ( os_file_handle, temp_path ) = HydrusTemp.GetTempPath()
         
         try:
             
-            HydrusArchiveHandling.ExtractCoverPage( path, temp_path )
+            HydrusArchiveHandling.ExtractCoverPage( path, temp_path, mime )
             
             cover_mime = GetMime( temp_path )
             
-            thumbnail_numpy = HydrusImageHandling.GenerateThumbnailNumPyFromStaticImagePath( temp_path, target_resolution, cover_mime )
+            if cover_mime == HC.TEXT_HTML:
+                
+                raise HydrusExceptions.NoThumbnailFileException( 'Do not support an HTML thumbnail for epubs yet!' )
+                
+            elif cover_mime == HC.IMAGE_SVG:
+                
+                thumbnail_numpy = HydrusSVGHandling.GenerateThumbnailNumPyFromSVGPath( temp_path, target_resolution )
+                
+            else:
+                
+                thumbnail_numpy = HydrusImageHandling.GenerateThumbnailNumPyFromStaticImagePath( temp_path, target_resolution, cover_mime )
+                
             
         except Exception as e:
             
@@ -417,7 +428,11 @@ def GetFileInfo( path, mime = None, ok_to_look_for_hydrus_updates = False ):
         
         if mime == HC.TEXT_HTML:
             
-            raise HydrusExceptions.UnsupportedFileException( 'Looks like HTML -- maybe the client needs to be taught how to parse this?' )
+            raise HydrusExceptions.UnsupportedFileException( 'Looks like HTML -- maybe the client needs to be taught how to recognise this URL, or parse it?' )
+            
+        elif mime == HC.APPLICATION_JSON:
+            
+            raise HydrusExceptions.UnsupportedFileException( 'Looks like JSON -- maybe the client needs to be taught how to recognise this URL, or parse it?' )
             
         elif mime == HC.APPLICATION_UNKNOWN:
             
@@ -460,13 +475,13 @@ def GetFileInfo( path, mime = None, ok_to_look_for_hydrus_updates = False ):
         
     
     # keep this in the specific-first, general-last test order
-    if mime == HC.APPLICATION_CBZ:
+    if mime == HC.APPLICATION_CBZ or mime == HC.APPLICATION_EPUB:
         
         ( os_file_handle, temp_path ) = HydrusTemp.GetTempPath()
         
         try:
             
-            HydrusArchiveHandling.ExtractCoverPage( path, temp_path )
+            HydrusArchiveHandling.ExtractCoverPage( path, temp_path, mime )
             
             cover_mime = GetMime( temp_path )
             

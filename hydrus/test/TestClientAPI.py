@@ -31,6 +31,7 @@ from hydrus.client import ClientLocation
 from hydrus.client import ClientServices
 from hydrus.client import ClientTime
 from hydrus.client.duplicates import ClientDuplicates
+from hydrus.client.duplicates import ClientPotentialDuplicatesSearchContext
 from hydrus.client.importing import ClientImportFiles
 from hydrus.client.media import ClientMediaManagers
 from hydrus.client.media import ClientMediaResult
@@ -1688,6 +1689,88 @@ class TestClientAPI( unittest.TestCase ):
         expected_content_update_package = ClientContentUpdates.ContentUpdatePackage.STATICCreateFromContentUpdates( CC.COMBINED_LOCAL_FILE_SERVICE_KEY, [ ClientContentUpdates.ContentUpdate( HC.CONTENT_TYPE_FILES, HC.CONTENT_UPDATE_INBOX, hashes ) ] )
         
         HF.compare_content_update_packages( self, content_update_package, expected_content_update_package )
+        
+    
+    def _test_add_files_generate_hashes( self, connection, set_up_permissions ):
+        
+        api_permissions = set_up_permissions[ 'add_files' ]
+        
+        access_key_hex = api_permissions.GetAccessKey().hex()
+        
+        # as body
+        
+        hash = b'\xadm5\x99\xa6\xc4\x89\xa5u\xeb\x19\xc0&\xfa\xce\x97\xa9\xcdey\xe7G(\xb0\xce\x94\xa6\x01\xd22\xf3\xc3'
+        
+        f = ClientImportFiles.FileImportStatus.STATICGetUnknownStatus()
+        
+        f.hash = hash
+        
+        hydrus_png_path = HydrusStaticDir.GetStaticPath( 'hydrus.png' )
+        
+        with open( hydrus_png_path, 'rb' ) as f:
+            
+            HYDRUS_PNG_BYTES = f.read()
+            
+        
+        headers = { 'Hydrus-Client-API-Access-Key' : access_key_hex, 'Content-Type' : HC.mime_mimetype_string_lookup[ HC.APPLICATION_OCTET_STREAM ] }
+        
+        path = '/add_files/generate_hashes'
+        
+        body = HYDRUS_PNG_BYTES
+        
+        connection.request( 'POST', path, body = body, headers = headers )
+        
+        response = connection.getresponse()
+        
+        data = response.read()
+        
+        text = str( data, 'utf-8' )
+        
+        self.assertEqual( response.status, 200 )
+        
+        response_json = json.loads( text )
+        
+        expected_result = { 'hash' : hash.hex(), 'perceptual_hashes' : ["b44dc7b24dcb381c"] , 'pixel_hash' : 'e12db22bf8ecf1f54ae1df3f0675a34a64e0c8f0801ae816b8aaae00f5d7f4fc' }
+        
+        wash_example_json_response( expected_result )
+        
+        self.assertEqual( response_json, expected_result )
+        
+        # do hydrus png as path
+        
+        hash = b'\xadm5\x99\xa6\xc4\x89\xa5u\xeb\x19\xc0&\xfa\xce\x97\xa9\xcdey\xe7G(\xb0\xce\x94\xa6\x01\xd22\xf3\xc3'
+        
+        f = ClientImportFiles.FileImportStatus.STATICGetUnknownStatus()
+        
+        f.hash = hash
+        
+        hydrus_png_path = HydrusStaticDir.GetStaticPath( 'hydrus.png' )
+        
+        headers = { 'Hydrus-Client-API-Access-Key' : access_key_hex, 'Content-Type' : HC.mime_mimetype_string_lookup[ HC.APPLICATION_JSON ] }
+        
+        path = '/add_files/generate_hashes'
+        
+        body_dict = { 'path' : hydrus_png_path }
+        
+        body = json.dumps( body_dict )
+        
+        connection.request( 'POST', path, body = body, headers = headers )
+        
+        response = connection.getresponse()
+        
+        data = response.read()
+        
+        text = str( data, 'utf-8' )
+        
+        self.assertEqual( response.status, 200 )
+        
+        response_json = json.loads( text )
+        
+        expected_result = { 'hash' : hash.hex(), 'perceptual_hashes' : ["b44dc7b24dcb381c"] , 'pixel_hash' : 'e12db22bf8ecf1f54ae1df3f0675a34a64e0c8f0801ae816b8aaae00f5d7f4fc' }
+        
+        wash_example_json_response( expected_result )
+        
+        self.assertEqual( response_json, expected_result )
         
     
     def _test_add_notes( self, connection, set_up_permissions ):
@@ -5076,181 +5159,7 @@ class TestClientAPI( unittest.TestCase ):
         self.assertEqual( pixel_duplicates, test_pixel_duplicates )
         self.assertEqual( max_hamming_distance, test_max_hamming_distance )
         
-        # get pairs
-        
-        default_max_num_pairs = 100
-        test_max_num_pairs = 20
-        
-        test_hash_pairs = [ ( os.urandom( 32 ), os.urandom( 32 ) ) for i in range( 10 ) ]
-        test_hash_pairs_hex = [ [ h1.hex(), h2.hex() ] for ( h1, h2 ) in test_hash_pairs ]
-        
-        TG.test_controller.SetRead( 'duplicate_pair_hashes_for_filtering', test_hash_pairs )
-        
-        path = '/manage_file_relationships/get_potential_pairs'
-        
-        connection.request( 'GET', path, headers = headers )
-        
-        response = connection.getresponse()
-        
-        data = response.read()
-        
-        text = str( data, 'utf-8' )
-        
-        self.assertEqual( response.status, 200 )
-        
-        d = json.loads( text )
-        
-        self.assertEqual( d[ 'potential_duplicate_pairs' ], test_hash_pairs_hex )
-        
-        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'duplicate_pair_hashes_for_filtering' )
-        
-        ( potential_duplicates_search_context, ) = args
-        
-        max_num_pairs = kwargs[ 'max_num_pairs' ]
-        
-        file_search_context_1 = potential_duplicates_search_context.GetFileSearchContext1()
-        file_search_context_2 = potential_duplicates_search_context.GetFileSearchContext2()
-        potentials_search_type = potential_duplicates_search_context.GetDupeSearchType()
-        pixel_duplicates = potential_duplicates_search_context.GetPixelDupesPreference()
-        max_hamming_distance = potential_duplicates_search_context.GetMaxHammingDistance()
-        
-        self.assertEqual( file_search_context_1.GetSerialisableTuple(), default_file_search_context.GetSerialisableTuple() )
-        self.assertEqual( file_search_context_2.GetSerialisableTuple(), default_file_search_context.GetSerialisableTuple() )
-        self.assertEqual( potentials_search_type, default_potentials_search_type )
-        self.assertEqual( pixel_duplicates, default_pixel_duplicates )
-        self.assertEqual( max_hamming_distance, default_max_hamming_distance )
-        self.assertEqual( max_num_pairs, default_max_num_pairs )
-        
-        # get pairs with params
-        
-        TG.test_controller.SetRead( 'duplicate_pair_hashes_for_filtering', test_hash_pairs )
-        
-        path = '/manage_file_relationships/get_potential_pairs?tag_service_key_1={}&tags_1={}&tag_service_key_2={}&tags_2={}&potentials_search_type={}&pixel_duplicates={}&max_hamming_distance={}&max_num_pairs={}'.format(
-            test_tag_service_key_1.hex(),
-            urllib.parse.quote( json.dumps( test_tags_1 ) ),
-            test_tag_service_key_2.hex(),
-            urllib.parse.quote( json.dumps( test_tags_2 ) ),
-            test_potentials_search_type,
-            test_pixel_duplicates,
-            test_max_hamming_distance,
-            test_max_num_pairs
-        )
-        
-        connection.request( 'GET', path, headers = headers )
-        
-        response = connection.getresponse()
-        
-        data = response.read()
-        
-        text = str( data, 'utf-8' )
-        
-        self.assertEqual( response.status, 200 )
-        
-        d = json.loads( text )
-        
-        self.assertEqual( d[ 'potential_duplicate_pairs' ], test_hash_pairs_hex )
-        
-        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'duplicate_pair_hashes_for_filtering' )
-
-        ( potential_duplicates_search_context, ) = args
-        
-        max_num_pairs = kwargs[ 'max_num_pairs' ]
-        
-        file_search_context_1 = potential_duplicates_search_context.GetFileSearchContext1()
-        file_search_context_2 = potential_duplicates_search_context.GetFileSearchContext2()
-        potentials_search_type = potential_duplicates_search_context.GetDupeSearchType()
-        pixel_duplicates = potential_duplicates_search_context.GetPixelDupesPreference()
-        max_hamming_distance = potential_duplicates_search_context.GetMaxHammingDistance()
-        
-        self.assertEqual( file_search_context_1.GetSerialisableTuple(), test_file_search_context_1.GetSerialisableTuple() )
-        self.assertEqual( file_search_context_2.GetSerialisableTuple(), test_file_search_context_2.GetSerialisableTuple() )
-        self.assertEqual( potentials_search_type, test_potentials_search_type )
-        self.assertEqual( pixel_duplicates, test_pixel_duplicates )
-        self.assertEqual( max_hamming_distance, test_max_hamming_distance )
-        self.assertEqual( max_num_pairs, test_max_num_pairs )
-        
-        # get random
-        
-        test_hashes = [ os.urandom( 32 ) for i in range( 6 ) ]
-        test_hash_pairs_hex = [ h.hex() for h in test_hashes ]
-        
-        TG.test_controller.SetRead( 'random_potential_duplicate_hashes', test_hashes )
-        
-        path = '/manage_file_relationships/get_random_potentials'
-        
-        connection.request( 'GET', path, headers = headers )
-        
-        response = connection.getresponse()
-        
-        data = response.read()
-        
-        text = str( data, 'utf-8' )
-        
-        self.assertEqual( response.status, 200 )
-        
-        d = json.loads( text )
-        
-        self.assertEqual( d[ 'random_potential_duplicate_hashes' ], test_hash_pairs_hex )
-        
-        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'random_potential_duplicate_hashes' )
-        
-        ( potential_duplicates_search_context, ) = args
-        
-        file_search_context_1 = potential_duplicates_search_context.GetFileSearchContext1()
-        file_search_context_2 = potential_duplicates_search_context.GetFileSearchContext2()
-        potentials_search_type = potential_duplicates_search_context.GetDupeSearchType()
-        pixel_duplicates = potential_duplicates_search_context.GetPixelDupesPreference()
-        max_hamming_distance = potential_duplicates_search_context.GetMaxHammingDistance()
-        
-        self.assertEqual( file_search_context_1.GetSerialisableTuple(), default_file_search_context.GetSerialisableTuple() )
-        self.assertEqual( file_search_context_2.GetSerialisableTuple(), default_file_search_context.GetSerialisableTuple() )
-        self.assertEqual( potentials_search_type, default_potentials_search_type )
-        self.assertEqual( pixel_duplicates, default_pixel_duplicates )
-        self.assertEqual( max_hamming_distance, default_max_hamming_distance )
-        
-        # get random with params
-        
-        TG.test_controller.SetRead( 'random_potential_duplicate_hashes', test_hashes )
-        
-        path = '/manage_file_relationships/get_random_potentials?tag_service_key_1={}&tags_1={}&tag_service_key_2={}&tags_2={}&potentials_search_type={}&pixel_duplicates={}&max_hamming_distance={}'.format(
-            test_tag_service_key_1.hex(),
-            urllib.parse.quote( json.dumps( test_tags_1 ) ),
-            test_tag_service_key_2.hex(),
-            urllib.parse.quote( json.dumps( test_tags_2 ) ),
-            test_potentials_search_type,
-            test_pixel_duplicates,
-            test_max_hamming_distance
-        )
-        
-        connection.request( 'GET', path, headers = headers )
-        
-        response = connection.getresponse()
-        
-        data = response.read()
-        
-        text = str( data, 'utf-8' )
-        
-        self.assertEqual( response.status, 200 )
-        
-        d = json.loads( text )
-        
-        self.assertEqual( d[ 'random_potential_duplicate_hashes' ], test_hash_pairs_hex )
-        
-        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'random_potential_duplicate_hashes' )
-
-        ( potential_duplicates_search_context, ) = args
-        
-        file_search_context_1 = potential_duplicates_search_context.GetFileSearchContext1()
-        file_search_context_2 = potential_duplicates_search_context.GetFileSearchContext2()
-        potentials_search_type = potential_duplicates_search_context.GetDupeSearchType()
-        pixel_duplicates = potential_duplicates_search_context.GetPixelDupesPreference()
-        max_hamming_distance = potential_duplicates_search_context.GetMaxHammingDistance()
-        
-        self.assertEqual( file_search_context_1.GetSerialisableTuple(), test_file_search_context_1.GetSerialisableTuple() )
-        self.assertEqual( file_search_context_2.GetSerialisableTuple(), test_file_search_context_2.GetSerialisableTuple() )
-        self.assertEqual( potentials_search_type, test_potentials_search_type )
-        self.assertEqual( pixel_duplicates, test_pixel_duplicates )
-        self.assertEqual( max_hamming_distance, test_max_hamming_distance )
+        #
         
         # set relationship
         
@@ -5402,6 +5311,585 @@ class TestClientAPI( unittest.TestCase ):
         [ ( args1, kwargs1 ), ( args2, kwargs2 ) ] = TG.test_controller.GetWrite( 'duplicate_set_king' )
         
         self.assertEqual( { args1[0], args2[0] }, { bytes.fromhex( h ) for h in test_hashes } )
+        
+    
+    def _test_manage_duplicate_potential_pairs( self, connection, set_up_permissions ):
+        
+        api_permissions = set_up_permissions[ 'everything' ]
+        
+        access_key_hex = api_permissions.GetAccessKey().hex()
+        
+        headers = { 'Hydrus-Client-API-Access-Key' : access_key_hex }
+        
+        default_location_context = ClientLocation.LocationContext.STATICCreateSimple( CC.COMBINED_LOCAL_MEDIA_SERVICE_KEY )
+        
+        #
+        
+        tag_context = ClientSearchTagContext.TagContext( CC.COMBINED_TAG_SERVICE_KEY )
+        predicates = [ ClientSearchPredicate.Predicate( ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_EVERYTHING ) ]
+        
+        default_file_search_context = ClientSearchFileSearchContext.FileSearchContext( location_context = default_location_context, tag_context = tag_context, predicates = predicates )
+        
+        default_potentials_search_type = ClientDuplicates.DUPE_SEARCH_ONE_FILE_MATCHES_ONE_SEARCH
+        default_pixel_duplicates = ClientDuplicates.SIMILAR_FILES_PIXEL_DUPES_ALLOWED
+        default_max_hamming_distance = 4
+        
+        test_tag_service_key_1 = CC.DEFAULT_LOCAL_TAG_SERVICE_KEY
+        test_tags_1 = [ 'skirt', 'system:width<400' ]
+        
+        test_tag_context_1 = ClientSearchTagContext.TagContext( test_tag_service_key_1 )
+        test_predicates_1 = ClientLocalServerCore.ConvertTagListToPredicates( None, test_tags_1, do_permission_check = False )
+        
+        test_file_search_context_1 = ClientSearchFileSearchContext.FileSearchContext( location_context = default_location_context, tag_context = test_tag_context_1, predicates = test_predicates_1 )
+        
+        test_tag_service_key_2 = TG.test_controller.example_tag_repo_service_key
+        test_tags_2 = [ 'system:untagged' ]
+        
+        test_tag_context_2 = ClientSearchTagContext.TagContext( test_tag_service_key_2 )
+        test_predicates_2 = ClientLocalServerCore.ConvertTagListToPredicates( None, test_tags_2, do_permission_check = False )
+        
+        test_file_search_context_2 = ClientSearchFileSearchContext.FileSearchContext( location_context = default_location_context, tag_context = test_tag_context_2, predicates = test_predicates_2 )
+        
+        test_potentials_search_type = ClientDuplicates.DUPE_SEARCH_BOTH_FILES_MATCH_DIFFERENT_SEARCHES
+        test_pixel_duplicates = ClientDuplicates.SIMILAR_FILES_PIXEL_DUPES_EXCLUDED
+        test_max_hamming_distance = 8
+        
+        #
+        
+        test_mr_pairs_and_distances = []
+        
+        hash_id = 0
+        
+        for i in range( 20 ):
+            
+            mr_1 = HF.GetFakeMediaResult( os.urandom( 32 ) )
+            mr_2 = HF.GetFakeMediaResult( os.urandom( 32 ) )
+            
+            mr_1.GetFileInfoManager().size = random.randint( 500, 50000 )
+            mr_2.GetFileInfoManager().size = random.randint( 500, 50000 )
+            
+            if mr_1.GetFileInfoManager().size == mr_2.GetFileInfoManager().size:
+                mr_2.GetFileInfoManager().size = mr_1.GetFileInfoManager().size + 1
+            
+            mr_1.GetFileInfoManager().hash_id = hash_id
+            hash_id += 1
+            
+            mr_2.GetFileInfoManager().hash_id = hash_id
+            hash_id += 1
+            
+            test_mr_pairs_and_distances.append( ( mr_1, mr_2, 0 ) )
+            
+        
+        test_potential_duplicate_id_pairs_and_distances = ClientPotentialDuplicatesSearchContext.PotentialDuplicateIdPairsAndDistances(
+            [ ( mr_1.GetFileInfoManager().hash_id, mr_2.GetFileInfoManager().hash_id, distance ) for ( mr_1, mr_2, distance ) in test_mr_pairs_and_distances ]
+        )
+        
+        test_potential_duplicate_media_result_pairs_and_distances = ClientPotentialDuplicatesSearchContext.PotentialDuplicateMediaResultPairsAndDistances( test_mr_pairs_and_distances )
+        
+        test_potential_duplicate_media_result_pairs_and_distances_duplicate = test_potential_duplicate_media_result_pairs_and_distances.Duplicate()
+        
+        TG.test_controller.SetRead( 'potential_duplicate_id_pairs_and_distances', test_potential_duplicate_id_pairs_and_distances )
+        
+        TG.test_controller.SetRead( 'potential_duplicate_media_result_pairs_and_distances_fragmentary', test_potential_duplicate_media_result_pairs_and_distances )
+        
+        path = '/manage_file_relationships/get_potential_pairs'
+        
+        connection.request( 'GET', path, headers = headers )
+        
+        response = connection.getresponse()
+        
+        data = response.read()
+        
+        text = str( data, 'utf-8' )
+        
+        self.assertEqual( response.status, 200 )
+        
+        d = json.loads( text )
+        
+        hashes_we_got_back_hex = d[ 'potential_duplicate_pairs' ]
+        hashes_we_got_back = [ ( bytes.fromhex( hash_hex_1 ), bytes.fromhex( hash_hex_2 ) ) for ( hash_hex_1, hash_hex_2 ) in hashes_we_got_back_hex ]
+        
+        test_potential_duplicate_media_result_pairs_and_distances_duplicate.Sort( ClientDuplicates.DUPE_PAIR_SORT_MAX_FILESIZE, False )
+        test_potential_duplicate_media_result_pairs_and_distances_duplicate.ABPairsUsingFastComparisonScore()
+        
+        hashes_we_expect = [ ( mr_1.GetHash(), mr_2.GetHash() ) for ( mr_1, mr_2 ) in test_potential_duplicate_media_result_pairs_and_distances_duplicate.GetPairs() ]
+        
+        self.assertEqual( hashes_we_got_back, hashes_we_expect )
+        
+        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'potential_duplicate_id_pairs_and_distances' )
+        
+        ( read_location_context, ) = args
+        
+        self.assertEqual( read_location_context, default_location_context )
+        
+        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'potential_duplicate_media_result_pairs_and_distances_fragmentary' )
+        
+        ( read_potential_duplicates_search_context, read_potential_duplicate_id_pairs_and_distances ) = args
+        
+        self.assertEqual( read_potential_duplicate_id_pairs_and_distances.GetPairs(), test_potential_duplicate_id_pairs_and_distances.GetPairs() )
+        
+        file_search_context_1 = read_potential_duplicates_search_context.GetFileSearchContext1()
+        file_search_context_2 = read_potential_duplicates_search_context.GetFileSearchContext2()
+        potentials_search_type = read_potential_duplicates_search_context.GetDupeSearchType()
+        pixel_duplicates = read_potential_duplicates_search_context.GetPixelDupesPreference()
+        max_hamming_distance = read_potential_duplicates_search_context.GetMaxHammingDistance()
+        
+        self.assertEqual( file_search_context_1.GetSerialisableTuple(), default_file_search_context.GetSerialisableTuple() )
+        self.assertEqual( file_search_context_2.GetSerialisableTuple(), default_file_search_context.GetSerialisableTuple() )
+        self.assertEqual( potentials_search_type, default_potentials_search_type )
+        self.assertEqual( pixel_duplicates, default_pixel_duplicates )
+        self.assertEqual( max_hamming_distance, default_max_hamming_distance )
+        
+        # get pairs with params
+        
+        test_potential_duplicate_media_result_pairs_and_distances = ClientPotentialDuplicatesSearchContext.PotentialDuplicateMediaResultPairsAndDistances( test_mr_pairs_and_distances )
+        
+        test_potential_duplicate_media_result_pairs_and_distances_duplicate = test_potential_duplicate_media_result_pairs_and_distances.Duplicate()
+        
+        TG.test_controller.SetRead( 'potential_duplicate_id_pairs_and_distances', test_potential_duplicate_id_pairs_and_distances )
+        
+        TG.test_controller.SetRead( 'potential_duplicate_media_result_pairs_and_distances_fragmentary', test_potential_duplicate_media_result_pairs_and_distances )
+        
+        path = '/manage_file_relationships/get_potential_pairs?tag_service_key_1={}&tags_1={}&tag_service_key_2={}&tags_2={}&potentials_search_type={}&pixel_duplicates={}&max_hamming_distance={}'.format(
+            test_tag_service_key_1.hex(),
+            urllib.parse.quote( json.dumps( test_tags_1 ) ),
+            test_tag_service_key_2.hex(),
+            urllib.parse.quote( json.dumps( test_tags_2 ) ),
+            test_potentials_search_type,
+            test_pixel_duplicates,
+            test_max_hamming_distance
+        )
+        
+        connection.request( 'GET', path, headers = headers )
+        
+        response = connection.getresponse()
+        
+        data = response.read()
+        
+        text = str( data, 'utf-8' )
+        
+        self.assertEqual( response.status, 200 )
+        
+        d = json.loads( text )
+        
+        hashes_we_got_back_hex = d[ 'potential_duplicate_pairs' ]
+        hashes_we_got_back = [ ( bytes.fromhex( hash_hex_1 ), bytes.fromhex( hash_hex_2 ) ) for ( hash_hex_1, hash_hex_2 ) in hashes_we_got_back_hex ]
+        
+        test_potential_duplicate_media_result_pairs_and_distances_duplicate.Sort( ClientDuplicates.DUPE_PAIR_SORT_MAX_FILESIZE, False )
+        test_potential_duplicate_media_result_pairs_and_distances_duplicate.ABPairsUsingFastComparisonScore()
+        
+        hashes_we_expect = [ ( mr_1.GetHash(), mr_2.GetHash() ) for ( mr_1, mr_2 ) in test_potential_duplicate_media_result_pairs_and_distances_duplicate.GetPairs() ]
+        
+        self.assertEqual( hashes_we_got_back, hashes_we_expect )
+        
+        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'potential_duplicate_id_pairs_and_distances' )
+        
+        ( read_location_context, ) = args
+        
+        self.assertEqual( read_location_context, default_location_context )
+        
+        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'potential_duplicate_media_result_pairs_and_distances_fragmentary' )
+        
+        ( read_potential_duplicates_search_context, read_potential_duplicate_id_pairs_and_distances ) = args
+        
+        self.assertEqual( read_potential_duplicate_id_pairs_and_distances.GetPairs(), test_potential_duplicate_id_pairs_and_distances.GetPairs() )
+        
+        file_search_context_1 = read_potential_duplicates_search_context.GetFileSearchContext1()
+        file_search_context_2 = read_potential_duplicates_search_context.GetFileSearchContext2()
+        potentials_search_type = read_potential_duplicates_search_context.GetDupeSearchType()
+        pixel_duplicates = read_potential_duplicates_search_context.GetPixelDupesPreference()
+        max_hamming_distance = read_potential_duplicates_search_context.GetMaxHammingDistance()
+        
+        self.assertEqual( file_search_context_1.GetSerialisableTuple(), test_file_search_context_1.GetSerialisableTuple() )
+        self.assertEqual( file_search_context_2.GetSerialisableTuple(), test_file_search_context_2.GetSerialisableTuple() )
+        self.assertEqual( potentials_search_type, test_potentials_search_type )
+        self.assertEqual( pixel_duplicates, test_pixel_duplicates )
+        self.assertEqual( max_hamming_distance, test_max_hamming_distance )
+        
+        # get pairs with max num
+        
+        test_potential_duplicate_media_result_pairs_and_distances = ClientPotentialDuplicatesSearchContext.PotentialDuplicateMediaResultPairsAndDistances( test_mr_pairs_and_distances )
+        
+        test_potential_duplicate_media_result_pairs_and_distances_duplicate = test_potential_duplicate_media_result_pairs_and_distances.Duplicate()
+        
+        TG.test_controller.SetRead( 'potential_duplicate_id_pairs_and_distances', test_potential_duplicate_id_pairs_and_distances )
+        
+        TG.test_controller.SetRead( 'potential_duplicate_media_result_pairs_and_distances_fragmentary', test_potential_duplicate_media_result_pairs_and_distances )
+        
+        test_max_num_pairs = 10
+        
+        path = '/manage_file_relationships/get_potential_pairs?tag_service_key_1={}&tags_1={}&tag_service_key_2={}&tags_2={}&potentials_search_type={}&pixel_duplicates={}&max_hamming_distance={}&max_num_pairs={}'.format(
+            test_tag_service_key_1.hex(),
+            urllib.parse.quote( json.dumps( test_tags_1 ) ),
+            test_tag_service_key_2.hex(),
+            urllib.parse.quote( json.dumps( test_tags_2 ) ),
+            test_potentials_search_type,
+            test_pixel_duplicates,
+            test_max_hamming_distance,
+            test_max_num_pairs
+        )
+        
+        connection.request( 'GET', path, headers = headers )
+        
+        response = connection.getresponse()
+        
+        data = response.read()
+        
+        text = str( data, 'utf-8' )
+        
+        self.assertEqual( response.status, 200 )
+        
+        d = json.loads( text )
+        
+        hashes_we_got_back_hex = d[ 'potential_duplicate_pairs' ]
+        hashes_we_got_back = [ ( bytes.fromhex( hash_hex_1 ), bytes.fromhex( hash_hex_2 ) ) for ( hash_hex_1, hash_hex_2 ) in hashes_we_got_back_hex ]
+        
+        self.assertEqual( len( hashes_we_got_back ), test_max_num_pairs )
+        
+        test_potential_duplicate_media_result_pairs_and_distances_duplicate.Sort( ClientDuplicates.DUPE_PAIR_SORT_MAX_FILESIZE, False )
+        test_potential_duplicate_media_result_pairs_and_distances_duplicate.ABPairsUsingFastComparisonScore()
+        
+        hashes_we_expect = [ ( mr_1.GetHash(), mr_2.GetHash() ) for ( mr_1, mr_2 ) in test_potential_duplicate_media_result_pairs_and_distances_duplicate.GetPairs() ]
+        
+        self.assertTrue( set( hashes_we_expect ).issuperset( set( hashes_we_got_back ) ) )
+        
+        hashes_we_got_back_fast = set( hashes_we_got_back )
+        
+        hashes_we_expect_cut_down_and_in_order = [ pair for pair in hashes_we_expect if pair in hashes_we_got_back_fast ]
+        
+        self.assertEqual( hashes_we_got_back, hashes_we_expect_cut_down_and_in_order )
+        
+        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'potential_duplicate_id_pairs_and_distances' )
+        
+        ( read_location_context, ) = args
+        
+        self.assertEqual( read_location_context, default_location_context )
+        
+        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'potential_duplicate_media_result_pairs_and_distances_fragmentary' )
+        
+        ( read_potential_duplicates_search_context, read_potential_duplicate_id_pairs_and_distances ) = args
+        
+        self.assertEqual( read_potential_duplicate_id_pairs_and_distances.GetPairs(), test_potential_duplicate_id_pairs_and_distances.GetPairs() )
+        
+        file_search_context_1 = read_potential_duplicates_search_context.GetFileSearchContext1()
+        file_search_context_2 = read_potential_duplicates_search_context.GetFileSearchContext2()
+        potentials_search_type = read_potential_duplicates_search_context.GetDupeSearchType()
+        pixel_duplicates = read_potential_duplicates_search_context.GetPixelDupesPreference()
+        max_hamming_distance = read_potential_duplicates_search_context.GetMaxHammingDistance()
+        
+        self.assertEqual( file_search_context_1.GetSerialisableTuple(), test_file_search_context_1.GetSerialisableTuple() )
+        self.assertEqual( file_search_context_2.GetSerialisableTuple(), test_file_search_context_2.GetSerialisableTuple() )
+        self.assertEqual( potentials_search_type, test_potentials_search_type )
+        self.assertEqual( pixel_duplicates, test_pixel_duplicates )
+        self.assertEqual( max_hamming_distance, test_max_hamming_distance )
+        
+        # now sort them
+        
+        test_potential_duplicate_media_result_pairs_and_distances = ClientPotentialDuplicatesSearchContext.PotentialDuplicateMediaResultPairsAndDistances( test_mr_pairs_and_distances )
+        
+        test_potential_duplicate_media_result_pairs_and_distances_duplicate = test_potential_duplicate_media_result_pairs_and_distances.Duplicate()
+        
+        TG.test_controller.SetRead( 'potential_duplicate_id_pairs_and_distances', test_potential_duplicate_id_pairs_and_distances )
+        
+        TG.test_controller.SetRead( 'potential_duplicate_media_result_pairs_and_distances_fragmentary', test_potential_duplicate_media_result_pairs_and_distances )
+        
+        test_max_num_pairs = 10
+        
+        path = '/manage_file_relationships/get_potential_pairs?tag_service_key_1={}&tags_1={}&tag_service_key_2={}&tags_2={}&potentials_search_type={}&pixel_duplicates={}&max_hamming_distance={}&max_num_pairs={}&duplicate_pair_sort_type={}&duplicate_pair_sort_asc={}'.format(
+            test_tag_service_key_1.hex(),
+            urllib.parse.quote( json.dumps( test_tags_1 ) ),
+            test_tag_service_key_2.hex(),
+            urllib.parse.quote( json.dumps( test_tags_2 ) ),
+            test_potentials_search_type,
+            test_pixel_duplicates,
+            test_max_hamming_distance,
+            test_max_num_pairs,
+            ClientDuplicates.DUPE_PAIR_SORT_MIN_FILESIZE,
+            'true'
+        )
+        
+        connection.request( 'GET', path, headers = headers )
+        
+        response = connection.getresponse()
+        
+        data = response.read()
+        
+        text = str( data, 'utf-8' )
+        
+        self.assertEqual( response.status, 200 )
+        
+        d = json.loads( text )
+        
+        hashes_we_got_back_hex = d[ 'potential_duplicate_pairs' ]
+        hashes_we_got_back = [ ( bytes.fromhex( hash_hex_1 ), bytes.fromhex( hash_hex_2 ) ) for ( hash_hex_1, hash_hex_2 ) in hashes_we_got_back_hex ]
+        
+        self.assertEqual( len( hashes_we_got_back ), test_max_num_pairs )
+        
+        test_potential_duplicate_media_result_pairs_and_distances_duplicate.Sort( ClientDuplicates.DUPE_PAIR_SORT_MIN_FILESIZE, True )
+        test_potential_duplicate_media_result_pairs_and_distances_duplicate.ABPairsUsingFastComparisonScore()
+        
+        hashes_we_expect = [ ( mr_1.GetHash(), mr_2.GetHash() ) for ( mr_1, mr_2 ) in test_potential_duplicate_media_result_pairs_and_distances_duplicate.GetPairs() ]
+        
+        self.assertTrue( set( hashes_we_expect ).issuperset( set( hashes_we_got_back ) ) )
+        
+        hashes_we_got_back_fast = set( hashes_we_got_back )
+        
+        hashes_we_expect_cut_down_and_in_order = [ pair for pair in hashes_we_expect if pair in hashes_we_got_back_fast ]
+        
+        self.assertEqual( hashes_we_got_back, hashes_we_expect_cut_down_and_in_order )
+        
+        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'potential_duplicate_id_pairs_and_distances' )
+        
+        ( read_location_context, ) = args
+        
+        self.assertEqual( read_location_context, default_location_context )
+        
+        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'potential_duplicate_media_result_pairs_and_distances_fragmentary' )
+        
+        ( read_potential_duplicates_search_context, read_potential_duplicate_id_pairs_and_distances ) = args
+        
+        self.assertEqual( read_potential_duplicate_id_pairs_and_distances.GetPairs(), test_potential_duplicate_id_pairs_and_distances.GetPairs() )
+        
+        file_search_context_1 = read_potential_duplicates_search_context.GetFileSearchContext1()
+        file_search_context_2 = read_potential_duplicates_search_context.GetFileSearchContext2()
+        potentials_search_type = read_potential_duplicates_search_context.GetDupeSearchType()
+        pixel_duplicates = read_potential_duplicates_search_context.GetPixelDupesPreference()
+        max_hamming_distance = read_potential_duplicates_search_context.GetMaxHammingDistance()
+        
+        self.assertEqual( file_search_context_1.GetSerialisableTuple(), test_file_search_context_1.GetSerialisableTuple() )
+        self.assertEqual( file_search_context_2.GetSerialisableTuple(), test_file_search_context_2.GetSerialisableTuple() )
+        self.assertEqual( potentials_search_type, test_potentials_search_type )
+        self.assertEqual( pixel_duplicates, test_pixel_duplicates )
+        self.assertEqual( max_hamming_distance, test_max_hamming_distance )
+        
+        # now group mode
+        
+        group_test_mr_pairs_and_distances = []
+        test_mr_pairs_and_distances = []
+        
+        hash_id = 0
+        
+        mr_1 = HF.GetFakeMediaResult( os.urandom( 32 ) )
+        mr_1.GetFileInfoManager().size = random.randint( 500, 50000 )
+        
+        mr_1.GetFileInfoManager().hash_id = hash_id
+        hash_id += 1
+        
+        for i in range( 5 ):
+            
+            mr_2 = HF.GetFakeMediaResult( os.urandom( 32 ) )
+            
+            mr_2.GetFileInfoManager().size = random.randint( 500, 50000 )
+            
+            mr_2.GetFileInfoManager().hash_id = hash_id
+            hash_id += 1
+            
+            group_test_mr_pairs_and_distances.append( ( mr_1, mr_2, 0 ) )
+            test_mr_pairs_and_distances.append( ( mr_1, mr_2, 0 ) )
+            
+        
+        for i in range( 20 ):
+            
+            mr_1 = HF.GetFakeMediaResult( os.urandom( 32 ) )
+            mr_2 = HF.GetFakeMediaResult( os.urandom( 32 ) )
+            
+            mr_1.GetFileInfoManager().size = random.randint( 500, 50000 )
+            mr_2.GetFileInfoManager().size = random.randint( 500, 50000 )
+            
+            mr_1.GetFileInfoManager().hash_id = hash_id
+            hash_id += 1
+            
+            mr_2.GetFileInfoManager().hash_id = hash_id
+            hash_id += 1
+            
+            test_mr_pairs_and_distances.append( ( mr_1, mr_2, 0 ) )
+            
+        
+        test_potential_duplicate_id_pairs_and_distances = ClientPotentialDuplicatesSearchContext.PotentialDuplicateIdPairsAndDistances(
+            [ ( mr_1.GetFileInfoManager().hash_id, mr_2.GetFileInfoManager().hash_id, distance ) for ( mr_1, mr_2, distance ) in test_mr_pairs_and_distances ]
+        )
+        
+        group_test_potential_duplicate_id_pairs_and_distances = ClientPotentialDuplicatesSearchContext.PotentialDuplicateIdPairsAndDistances(
+            [ ( mr_1.GetFileInfoManager().hash_id, mr_2.GetFileInfoManager().hash_id, distance ) for ( mr_1, mr_2, distance ) in group_test_mr_pairs_and_distances ]
+        )
+        
+        test_potential_duplicate_media_result_pairs_and_distances = ClientPotentialDuplicatesSearchContext.PotentialDuplicateMediaResultPairsAndDistances( group_test_mr_pairs_and_distances )
+        
+        test_potential_duplicate_media_result_pairs_and_distances_duplicate = test_potential_duplicate_media_result_pairs_and_distances.Duplicate()
+        
+        TG.test_controller.SetRead( 'potential_duplicate_id_pairs_and_distances', test_potential_duplicate_id_pairs_and_distances )
+        
+        TG.test_controller.SetRead( 'potential_duplicate_id_pairs_and_distances_fragmentary', group_test_potential_duplicate_id_pairs_and_distances )
+        
+        TG.test_controller.SetRead( 'potential_duplicate_media_result_pairs_and_distances_fragmentary', test_potential_duplicate_media_result_pairs_and_distances )
+        
+        path = '/manage_file_relationships/get_potential_pairs?tag_service_key_1={}&tags_1={}&tag_service_key_2={}&tags_2={}&potentials_search_type={}&pixel_duplicates={}&max_hamming_distance={}&duplicate_pair_sort_type={}&duplicate_pair_sort_asc={}&group_mode={}'.format(
+            test_tag_service_key_1.hex(),
+            urllib.parse.quote( json.dumps( test_tags_1 ) ),
+            test_tag_service_key_2.hex(),
+            urllib.parse.quote( json.dumps( test_tags_2 ) ),
+            test_potentials_search_type,
+            test_pixel_duplicates,
+            test_max_hamming_distance,
+            ClientDuplicates.DUPE_PAIR_SORT_MIN_FILESIZE,
+            'true',
+            'true'
+        )
+        
+        connection.request( 'GET', path, headers = headers )
+        
+        response = connection.getresponse()
+        
+        data = response.read()
+        
+        text = str( data, 'utf-8' )
+        
+        self.assertEqual( response.status, 200 )
+        
+        d = json.loads( text )
+        
+        hashes_we_got_back_hex = d[ 'potential_duplicate_pairs' ]
+        hashes_we_got_back = [ ( bytes.fromhex( hash_hex_1 ), bytes.fromhex( hash_hex_2 ) ) for ( hash_hex_1, hash_hex_2 ) in hashes_we_got_back_hex ]
+        
+        self.assertEqual( len( hashes_we_got_back ), 5 )
+        
+        test_potential_duplicate_media_result_pairs_and_distances_duplicate.Sort( ClientDuplicates.DUPE_PAIR_SORT_MIN_FILESIZE, True )
+        test_potential_duplicate_media_result_pairs_and_distances_duplicate.ABPairsUsingFastComparisonScore()
+        
+        hashes_we_expect = [ ( mr_1.GetHash(), mr_2.GetHash() ) for ( mr_1, mr_2 ) in test_potential_duplicate_media_result_pairs_and_distances_duplicate.GetPairs() ]
+        
+        self.assertTrue( set( hashes_we_expect ).issuperset( set( hashes_we_got_back ) ) )
+        
+        hashes_we_got_back_fast = set( hashes_we_got_back )
+        
+        hashes_we_expect_cut_down_and_in_order = [ pair for pair in hashes_we_expect if pair in hashes_we_got_back_fast ]
+        
+        self.assertEqual( hashes_we_got_back, hashes_we_expect_cut_down_and_in_order )
+        
+        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'potential_duplicate_id_pairs_and_distances' )
+        
+        ( read_location_context, ) = args
+        
+        self.assertEqual( read_location_context, default_location_context )
+        
+        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'potential_duplicate_id_pairs_and_distances_fragmentary' )
+        
+        ( read_potential_duplicates_search_context, read_potential_duplicate_id_pairs_and_distances ) = args
+        
+        file_search_context_1 = read_potential_duplicates_search_context.GetFileSearchContext1()
+        file_search_context_2 = read_potential_duplicates_search_context.GetFileSearchContext2()
+        potentials_search_type = read_potential_duplicates_search_context.GetDupeSearchType()
+        pixel_duplicates = read_potential_duplicates_search_context.GetPixelDupesPreference()
+        max_hamming_distance = read_potential_duplicates_search_context.GetMaxHammingDistance()
+        
+        self.assertEqual( file_search_context_1.GetSerialisableTuple(), test_file_search_context_1.GetSerialisableTuple() )
+        self.assertEqual( file_search_context_2.GetSerialisableTuple(), test_file_search_context_2.GetSerialisableTuple() )
+        self.assertEqual( potentials_search_type, test_potentials_search_type )
+        self.assertEqual( pixel_duplicates, test_pixel_duplicates )
+        self.assertEqual( max_hamming_distance, test_max_hamming_distance )
+        
+        self.assertEqual( read_potential_duplicate_id_pairs_and_distances.GetPairs(), test_potential_duplicate_id_pairs_and_distances.GetPairs() )
+        
+        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'potential_duplicate_media_result_pairs_and_distances_fragmentary' )
+        
+        ( read_potential_duplicates_search_context, read_potential_duplicate_id_pairs_and_distances ) = args
+        
+        self.assertEqual( set( read_potential_duplicate_id_pairs_and_distances.GetPairs() ), set( group_test_potential_duplicate_id_pairs_and_distances.GetPairs() ) ) # jumbled by this point
+        
+        file_search_context_1 = read_potential_duplicates_search_context.GetFileSearchContext1()
+        file_search_context_2 = read_potential_duplicates_search_context.GetFileSearchContext2()
+        potentials_search_type = read_potential_duplicates_search_context.GetDupeSearchType()
+        pixel_duplicates = read_potential_duplicates_search_context.GetPixelDupesPreference()
+        max_hamming_distance = read_potential_duplicates_search_context.GetMaxHammingDistance()
+        
+        self.assertEqual( file_search_context_1.GetSerialisableTuple(), test_file_search_context_1.GetSerialisableTuple() )
+        self.assertEqual( file_search_context_2.GetSerialisableTuple(), test_file_search_context_2.GetSerialisableTuple() )
+        self.assertEqual( potentials_search_type, test_potentials_search_type )
+        self.assertEqual( pixel_duplicates, test_pixel_duplicates )
+        self.assertEqual( max_hamming_distance, test_max_hamming_distance )
+        
+        # get random
+        
+        test_hashes = [ os.urandom( 32 ) for i in range( 6 ) ]
+        test_hash_pairs_hex = [ h.hex() for h in test_hashes ]
+        
+        TG.test_controller.SetRead( 'random_potential_duplicate_hashes', test_hashes )
+        
+        path = '/manage_file_relationships/get_random_potentials'
+        
+        connection.request( 'GET', path, headers = headers )
+        
+        response = connection.getresponse()
+        
+        data = response.read()
+        
+        text = str( data, 'utf-8' )
+        
+        self.assertEqual( response.status, 200 )
+        
+        d = json.loads( text )
+        
+        self.assertEqual( d[ 'random_potential_duplicate_hashes' ], test_hash_pairs_hex )
+        
+        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'random_potential_duplicate_hashes' )
+        
+        ( potential_duplicates_search_context, ) = args
+        
+        file_search_context_1 = potential_duplicates_search_context.GetFileSearchContext1()
+        file_search_context_2 = potential_duplicates_search_context.GetFileSearchContext2()
+        potentials_search_type = potential_duplicates_search_context.GetDupeSearchType()
+        pixel_duplicates = potential_duplicates_search_context.GetPixelDupesPreference()
+        max_hamming_distance = potential_duplicates_search_context.GetMaxHammingDistance()
+        
+        self.assertEqual( file_search_context_1.GetSerialisableTuple(), default_file_search_context.GetSerialisableTuple() )
+        self.assertEqual( file_search_context_2.GetSerialisableTuple(), default_file_search_context.GetSerialisableTuple() )
+        self.assertEqual( potentials_search_type, default_potentials_search_type )
+        self.assertEqual( pixel_duplicates, default_pixel_duplicates )
+        self.assertEqual( max_hamming_distance, default_max_hamming_distance )
+        
+        # get random with params
+        
+        TG.test_controller.SetRead( 'random_potential_duplicate_hashes', test_hashes )
+        
+        path = '/manage_file_relationships/get_random_potentials?tag_service_key_1={}&tags_1={}&tag_service_key_2={}&tags_2={}&potentials_search_type={}&pixel_duplicates={}&max_hamming_distance={}'.format(
+            test_tag_service_key_1.hex(),
+            urllib.parse.quote( json.dumps( test_tags_1 ) ),
+            test_tag_service_key_2.hex(),
+            urllib.parse.quote( json.dumps( test_tags_2 ) ),
+            test_potentials_search_type,
+            test_pixel_duplicates,
+            test_max_hamming_distance
+        )
+        
+        connection.request( 'GET', path, headers = headers )
+        
+        response = connection.getresponse()
+        
+        data = response.read()
+        
+        text = str( data, 'utf-8' )
+        
+        self.assertEqual( response.status, 200 )
+        
+        d = json.loads( text )
+        
+        self.assertEqual( d[ 'random_potential_duplicate_hashes' ], test_hash_pairs_hex )
+        
+        [ ( args, kwargs ) ] = TG.test_controller.GetRead( 'random_potential_duplicate_hashes' )
+
+        ( potential_duplicates_search_context, ) = args
+        
+        file_search_context_1 = potential_duplicates_search_context.GetFileSearchContext1()
+        file_search_context_2 = potential_duplicates_search_context.GetFileSearchContext2()
+        potentials_search_type = potential_duplicates_search_context.GetDupeSearchType()
+        pixel_duplicates = potential_duplicates_search_context.GetPixelDupesPreference()
+        max_hamming_distance = potential_duplicates_search_context.GetMaxHammingDistance()
+        
+        self.assertEqual( file_search_context_1.GetSerialisableTuple(), test_file_search_context_1.GetSerialisableTuple() )
+        self.assertEqual( file_search_context_2.GetSerialisableTuple(), test_file_search_context_2.GetSerialisableTuple() )
+        self.assertEqual( potentials_search_type, test_potentials_search_type )
+        self.assertEqual( pixel_duplicates, test_pixel_duplicates )
+        self.assertEqual( max_hamming_distance, test_max_hamming_distance )
         
     
     def _test_manage_pages( self, connection, set_up_permissions ):
@@ -7696,6 +8184,7 @@ class TestClientAPI( unittest.TestCase ):
         self._test_add_files_add_file( connection, set_up_permissions )
         self._test_add_files_other_actions( connection, set_up_permissions )
         self._test_add_files_migrate_files( connection, set_up_permissions )
+        self._test_add_files_generate_hashes( connection, set_up_permissions )
         self._test_add_notes( connection, set_up_permissions )
         self._test_edit_ratings( connection, set_up_permissions )
         self._test_edit_times( connection, set_up_permissions )
@@ -7708,6 +8197,7 @@ class TestClientAPI( unittest.TestCase ):
         self._test_associate_urls( connection, set_up_permissions )
         self._test_manage_services( connection, set_up_permissions )
         self._test_manage_duplicates( connection, set_up_permissions )
+        self._test_manage_duplicate_potential_pairs( connection, set_up_permissions )
         self._test_manage_cookies( connection, set_up_permissions )
         self._test_manage_headers( connection, set_up_permissions )
         self._test_manage_pages( connection, set_up_permissions )

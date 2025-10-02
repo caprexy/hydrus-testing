@@ -496,7 +496,7 @@ The formula should attempt to parse full or relative urls. If the url is relativ
                 
                 parsed_urls = node.ParseURLs( job_status, data, referral_url )
                 
-                QP.CallAfter( qt_code, parsed_urls )
+                CG.client_controller.CallAfter( self, qt_code, parsed_urls )
                 
             except Exception as e:
                 
@@ -811,7 +811,7 @@ And pass that html to a number of 'parsing children' that will each look through
                 
                 parsed_post = script.Parse( job_status, data )
                 
-                QP.CallAfter( qt_code, parsed_post )
+                CG.client_controller.CallAfter( self, qt_code, parsed_post )
                 
             except Exception as e:
                 
@@ -1361,10 +1361,17 @@ class ScriptManagementControl( QW.QWidget ):
         
         menu = ClientGUIMenus.GenerateMenu( self )
         
+        open_submenu = ClientGUIMenus.GenerateMenu( menu )
+        copy_submenu = ClientGUIMenus.GenerateMenu( menu )
+        
         for url in urls:
             
-            ClientGUIMenus.AppendMenuItem( menu, url, 'launch this url in your browser', ClientPaths.LaunchURLInWebBrowser, url )
+            ClientGUIMenus.AppendMenuItem( open_submenu, url, 'launch this url in your browser', ClientPaths.LaunchURLInWebBrowser, url )
+            ClientGUIMenus.AppendMenuItem( copy_submenu, url, 'copy this url to your clipboard', CG.client_controller.pub, 'clipboard', 'text', url )
             
+        
+        ClientGUIMenus.AppendMenu( menu, open_submenu, 'open' )
+        ClientGUIMenus.AppendMenu( menu, copy_submenu, 'copy' )
         
         CGC.core().PopupMenu( self, menu )
         

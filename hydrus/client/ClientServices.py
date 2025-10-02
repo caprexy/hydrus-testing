@@ -11,7 +11,6 @@ import typing
 from hydrus.core import HydrusConstants as HC
 from hydrus.core import HydrusData
 from hydrus.core import HydrusExceptions
-from hydrus.core import HydrusGlobals as HG
 from hydrus.core import HydrusLists
 from hydrus.core import HydrusNumbers
 from hydrus.core import HydrusSerialisable
@@ -1681,11 +1680,6 @@ class ServiceRepository( ServiceRestricted ):
         CG.client_controller.frame_splash_status.SetText( popup_message, print_to_log = False )
         job_status.SetStatusText( popup_message, 2 )
         
-        if HG.profile_mode:
-            
-            CG.client_controller.PrintProfile( popup_message )
-            
-        
     
     def _SyncDownloadMetadata( self ):
         
@@ -2050,25 +2044,25 @@ class ServiceRepository( ServiceRestricted ):
                         
                         if CG.client_controller.CurrentlyVeryIdle():
                             
-                            work_time = HydrusTime.SecondiseMSFloat( CG.client_controller.new_options.GetInteger( 'repository_processing_work_time_ms_very_idle' ) )
+                            expected_work_period = HydrusTime.SecondiseMSFloat( CG.client_controller.new_options.GetInteger( 'repository_processing_work_time_ms_very_idle' ) )
                             rest_ratio = CG.client_controller.new_options.GetInteger( 'repository_processing_rest_percentage_very_idle' ) / 100
                             
                         elif CG.client_controller.CurrentlyIdle():
                             
-                            work_time = HydrusTime.SecondiseMSFloat( CG.client_controller.new_options.GetInteger( 'repository_processing_work_time_ms_idle' ) )
+                            expected_work_period = HydrusTime.SecondiseMSFloat( CG.client_controller.new_options.GetInteger( 'repository_processing_work_time_ms_idle' ) )
                             rest_ratio = CG.client_controller.new_options.GetInteger( 'repository_processing_rest_percentage_idle' ) / 100
                             
                         else:
                             
-                            work_time = HydrusTime.SecondiseMSFloat( CG.client_controller.new_options.GetInteger( 'repository_processing_work_time_ms_normal' ) )
+                            expected_work_period = HydrusTime.SecondiseMSFloat( CG.client_controller.new_options.GetInteger( 'repository_processing_work_time_ms_normal' ) )
                             rest_ratio = CG.client_controller.new_options.GetInteger( 'repository_processing_rest_percentage_normal' ) / 100
                             
                         
                         start_time = HydrusTime.GetNowPrecise()
                         
-                        num_rows_done = CG.client_controller.WriteSynchronous( 'process_repository_definitions', self._service_key, definition_hash, iterator_dict, content_types, job_status, work_time )
+                        num_rows_done = CG.client_controller.WriteSynchronous( 'process_repository_definitions', self._service_key, definition_hash, iterator_dict, content_types, job_status, expected_work_period )
                         
-                        time_it_took = HydrusTime.GetNowPrecise() - start_time
+                        actual_work_period = HydrusTime.GetNowPrecise() - start_time
                         
                         rows_done_in_this_update += num_rows_done
                         total_definition_rows_completed += num_rows_done
@@ -2087,7 +2081,7 @@ class ServiceRepository( ServiceRestricted ):
                             return
                             
                         
-                        reasonable_work_time = min( 5 * work_time, time_it_took )
+                        reasonable_work_time = min( 5 * expected_work_period, actual_work_period )
                         
                         time.sleep( reasonable_work_time * rest_ratio )
                         
@@ -2200,25 +2194,25 @@ class ServiceRepository( ServiceRestricted ):
                         
                         if CG.client_controller.CurrentlyVeryIdle():
                             
-                            work_time = HydrusTime.SecondiseMSFloat( CG.client_controller.new_options.GetInteger( 'repository_processing_work_time_ms_very_idle' ) )
+                            expected_work_period = HydrusTime.SecondiseMSFloat( CG.client_controller.new_options.GetInteger( 'repository_processing_work_time_ms_very_idle' ) )
                             rest_ratio = CG.client_controller.new_options.GetInteger( 'repository_processing_rest_percentage_very_idle' ) / 100
                             
                         elif CG.client_controller.CurrentlyIdle():
                             
-                            work_time = HydrusTime.SecondiseMSFloat( CG.client_controller.new_options.GetInteger( 'repository_processing_work_time_ms_idle' ) )
+                            expected_work_period = HydrusTime.SecondiseMSFloat( CG.client_controller.new_options.GetInteger( 'repository_processing_work_time_ms_idle' ) )
                             rest_ratio = CG.client_controller.new_options.GetInteger( 'repository_processing_rest_percentage_idle' ) / 100
                             
                         else:
                             
-                            work_time = HydrusTime.SecondiseMSFloat( CG.client_controller.new_options.GetInteger( 'repository_processing_work_time_ms_normal' ) )
+                            expected_work_period = HydrusTime.SecondiseMSFloat( CG.client_controller.new_options.GetInteger( 'repository_processing_work_time_ms_normal' ) )
                             rest_ratio = CG.client_controller.new_options.GetInteger( 'repository_processing_rest_percentage_normal' ) / 100
                             
                         
                         start_time = HydrusTime.GetNowPrecise()
                         
-                        num_rows_done = CG.client_controller.WriteSynchronous( 'process_repository_content', self._service_key, content_hash, iterator_dict, content_types, job_status, work_time )
+                        num_rows_done = CG.client_controller.WriteSynchronous( 'process_repository_content', self._service_key, content_hash, iterator_dict, content_types, job_status, expected_work_period )
                         
-                        time_it_took = HydrusTime.GetNowPrecise() - start_time
+                        actual_work_period = HydrusTime.GetNowPrecise() - start_time
                         
                         rows_done_in_this_update += num_rows_done
                         total_content_rows_completed += num_rows_done
@@ -2237,7 +2231,7 @@ class ServiceRepository( ServiceRestricted ):
                             return
                             
                         
-                        reasonable_work_time = min( 5 * work_time, time_it_took )
+                        reasonable_work_time = min( 5 * expected_work_period, actual_work_period )
                         
                         time.sleep( reasonable_work_time * rest_ratio )
                         

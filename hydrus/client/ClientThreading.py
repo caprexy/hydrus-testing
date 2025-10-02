@@ -111,7 +111,10 @@ class JobStatus( object ):
         
         with self._variable_lock:
             
-            self._urls.append( url )
+            if url not in self._urls:
+                
+                self._urls.append( url )
+                
             
         
     
@@ -645,7 +648,8 @@ class QtAwareJob( HydrusThreading.SingleJob ):
             self.Work()
             
         
-        QP.CallAfter( qt_code )
+        # yo if you change this, alter how profile_mode (ui) works
+        CG.client_controller.CallAfter( self._window, qt_code )
         
     
     def _MyWindowDead( self ):
@@ -670,6 +674,7 @@ class QtAwareJob( HydrusThreading.SingleJob ):
         return self._MyWindowDead()
         
     
+
 class QtAwareRepeatingJob( HydrusThreading.RepeatingJob ):
     
     PRETTY_CLASS_NAME = 'repeating UI job'
@@ -695,7 +700,8 @@ class QtAwareRepeatingJob( HydrusThreading.RepeatingJob ):
     
     def _BootWorker( self ):
         
-        QP.CallAfter( self._QTWork )
+        # yo if you change this, alter how profile_mode (ui) works
+        CG.client_controller.CallAfter( self._window, self._QTWork )
         
     
     def _MyWindowDead( self ):

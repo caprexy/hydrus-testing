@@ -1,3 +1,4 @@
+import collections
 import itertools
 
 from qtpy import QtCore as QC
@@ -12,17 +13,21 @@ from hydrus.client import ClientConstants as CC
 from hydrus.client import ClientGlobals as CG
 from hydrus.client import ClientLocation
 from hydrus.client.duplicates import ClientDuplicatesAutoResolution
+from hydrus.client.duplicates import ClientPotentialDuplicatesPairFactory
+from hydrus.client.duplicates import ClientPotentialDuplicatesSearchContext
 from hydrus.client.gui import ClientGUIAsync
 from hydrus.client.gui import ClientGUIDialogsMessage
 from hydrus.client.gui import ClientGUIDialogsQuick
 from hydrus.client.gui import ClientGUIFunctions
 from hydrus.client.gui import QtPorting as QP
 from hydrus.client.gui.canvas import ClientGUICanvas
+from hydrus.client.gui.canvas import ClientGUICanvasDuplicates
 from hydrus.client.gui.canvas import ClientGUICanvasFrame
 from hydrus.client.gui.duplicates import ThumbnailPairList
 from hydrus.client.gui.media import ClientGUIMediaSimpleActions
 from hydrus.client.gui.panels import ClientGUIScrolledPanels
 from hydrus.client.gui.widgets import ClientGUICommon
+from hydrus.client.media import ClientMedia
 
 class ReviewActionsPanel( ClientGUIScrolledPanels.ReviewPanel ):
     
@@ -185,6 +190,12 @@ class ReviewActionsPanel( ClientGUIScrolledPanels.ReviewPanel ):
         self._RefetchDeclinedPairs()
         
         CG.client_controller.sub( self, 'CloseFromEditDialog', 'edit_duplicates_auto_resolution_rules_dialog_opening' )
+        CG.client_controller.sub( self, '_RefetchPendingActionPairs', 'notify_duplicate_filter_non_blocking_commit_complete' )
+        
+        if rule.GetOperationMode() != ClientDuplicatesAutoResolution.DUPLICATES_AUTO_RESOLUTION_RULE_OPERATION_MODE_WORK_BUT_NO_ACTION:
+            
+            self._main_notebook.setCurrentWidget( self._actioned_pairs_panel )
+            
         
     
     def _ActionedRowActivated( self, model_index: QC.QModelIndex ):
@@ -204,7 +215,7 @@ class ReviewActionsPanel( ClientGUIScrolledPanels.ReviewPanel ):
     def _ApproveSelectedPending( self ):
         
         model = self._pending_actions_pair_list.model()
-        indices = self._pending_actions_pair_list.selectedIndexes()
+        indices = self._pending_actions_pair_list.selectionModel().selectedRows()
         
         selected_pairs = [ model.GetMediaResultPair( index.row() ) for index in indices ]
         
@@ -214,6 +225,16 @@ class ReviewActionsPanel( ClientGUIScrolledPanels.ReviewPanel ):
             
             return
             
+        
+        decisions = [ ClientPotentialDuplicatesPairFactory.DuplicatePairDecisionApproveDeny(
+            media_result_a,
+            media_result_b,
+            True
+            ) for (
+                media_result_a,
+                media_result_b
+            ) in selected_pairs
+        ]
         
         earliest_selected_row_index = min( ( index.row() for index in indices ) )
         
@@ -238,15 +259,13 @@ class ReviewActionsPanel( ClientGUIScrolledPanels.ReviewPanel ):
         
         def work_callable():
             
-            for ( num_done, num_to_do, chunk ) in HydrusLists.SplitListIntoChunksRich( selected_pairs, 4 ):
-                
-                message = f'approving: {HydrusNumbers.ValueRangeToPrettyString( num_done, num_to_do )}'
-                
-                CG.client_controller.CallAfterQtSafe( self, 'approve pairs status hook', status_hook, message )
-                
-                # this is safe to run on a bunch of related pairs like AB, AC, DB--the db figures that out
-                CG.client_controller.WriteSynchronous( 'duplicates_auto_resolution_approve_pending_pairs', rule, chunk )
-                
+            wrapped_status_hook = lambda message: CG.client_controller.CallAfterQtSafe( self, 'approve pairs status hook', status_hook, message )
+            
+            ClientDuplicatesAutoResolution.ActionAutoResolutionReviewPairs(
+                rule,
+                decisions,
+                status_hook = wrapped_status_hook
+            )
             
             return 1
             
@@ -348,7 +367,7 @@ class ReviewActionsPanel( ClientGUIScrolledPanels.ReviewPanel ):
     def _DenySelectedPending( self ):
         
         model = self._pending_actions_pair_list.model()
-        indices = self._pending_actions_pair_list.selectedIndexes()
+        indices = self._pending_actions_pair_list.selectionModel().selectedRows()
         
         selected_pairs = [ model.GetMediaResultPair( index.row() ) for index in indices ]
         
@@ -358,6 +377,16 @@ class ReviewActionsPanel( ClientGUIScrolledPanels.ReviewPanel ):
             
             return
             
+        
+        decisions = [ ClientPotentialDuplicatesPairFactory.DuplicatePairDecisionApproveDeny(
+            media_result_a,
+            media_result_b,
+            False
+            ) for (
+                media_result_a,
+                media_result_b
+            ) in selected_pairs
+        ]
         
         earliest_selected_row_index = min( ( index.row() for index in indices ) )
         
@@ -382,15 +411,13 @@ class ReviewActionsPanel( ClientGUIScrolledPanels.ReviewPanel ):
         
         def work_callable():
             
-            for ( num_done, num_to_do, chunk ) in HydrusLists.SplitListIntoChunksRich( selected_pairs, 4 ):
-                
-                message = f'denying: {HydrusNumbers.ValueRangeToPrettyString( num_done, num_to_do )}'
-                
-                CG.client_controller.CallAfterQtSafe( self, 'deny pairs status hook', status_hook, message )
-                
-                # this is safe to run on a bunch of related pairs like AB, AC, DB--the db figures that out
-                CG.client_controller.WriteSynchronous( 'duplicates_auto_resolution_deny_pending_pairs', rule, chunk )
-                
+            wrapped_status_hook = lambda message: CG.client_controller.CallAfterQtSafe( self, 'deny pairs status hook', status_hook, message )
+            
+            ClientDuplicatesAutoResolution.ActionAutoResolutionReviewPairs(
+                rule,
+                decisions,
+                status_hook = wrapped_status_hook
+            )
             
             return 1
             
@@ -451,9 +478,29 @@ class ReviewActionsPanel( ClientGUIScrolledPanels.ReviewPanel ):
         
         row = model_index.row()
         
-        ( media_result_1, media_result_2 ) = self._pending_actions_pair_list.model().GetMediaResultPair( row )
+        media_result_pairs = self._pending_actions_pair_list.model().GetMediaResultPairsStartingAtIndex( row )
         
-        self._ShowMediaViewer( media_result_1, media_result_2 )
+        if len( media_result_pairs ) == 0:
+            
+            return
+            
+        
+        media_result_pairs = [ ( m_a, m_b ) for ( m_a, m_b ) in media_result_pairs if m_a.GetLocationsManager().IsLocal() and m_b.GetLocationsManager().IsLocal() ]
+        
+        if len( media_result_pairs ) == 0:
+            
+            ClientGUIDialogsMessage.ShowWarning( self, 'Sorry, but it seems there is nothing to show! Every pair I saw had at least one non-local file. Try refreshing the panel!' )
+            
+            return
+            
+        
+        # with a bit of jiggling I can probably deliver the real distance, but w/e for now, not important
+        
+        media_result_pairs_and_fake_distances = [ ( m_a, m_b, 0 ) for ( m_a, m_b ) in media_result_pairs ]
+        
+        potential_duplicate_media_result_pairs_and_distances = ClientPotentialDuplicatesSearchContext.PotentialDuplicateMediaResultPairsAndDistances( media_result_pairs_and_fake_distances )
+        
+        self._ShowDuplicateFilter( potential_duplicate_media_result_pairs_and_distances )
         
     
     def _RefetchActionedPairs( self ):
@@ -560,6 +607,20 @@ class ReviewActionsPanel( ClientGUIScrolledPanels.ReviewPanel ):
         self._pending_actions_pair_list.selectAll()
         
     
+    def _ShowDuplicateFilter( self, potential_duplicate_media_result_pairs_and_distances: ClientPotentialDuplicatesSearchContext.PotentialDuplicateMediaResultPairsAndDistances ):
+        
+        canvas_frame = ClientGUICanvasFrame.CanvasFrame( self.window(), set_parent = True )
+        
+        potential_duplicate_pair_factory = ClientPotentialDuplicatesPairFactory.PotentialDuplicatePairFactoryAutoResolutionReview( potential_duplicate_media_result_pairs_and_distances, self._rule )
+        
+        canvas_window = ClientGUICanvasDuplicates.CanvasFilterDuplicates( canvas_frame, potential_duplicate_pair_factory )
+        
+        canvas_window.canvasWithHoversExiting.connect( CG.client_controller.gui.NotifyMediaViewerExiting )
+        canvas_window.showPairInPage.connect( self._ShowPairInPage )
+        
+        canvas_frame.SetCanvas( canvas_window )
+        
+    
     def _ShowMediaViewer( self, media_result_1, media_result_2 ):
         
         canvas_frame = ClientGUICanvasFrame.CanvasFrame( self.window(), set_parent = True )
@@ -586,10 +647,17 @@ class ReviewActionsPanel( ClientGUIScrolledPanels.ReviewPanel ):
         canvas_frame.SetCanvas( canvas_window )
         
     
+    def _ShowPairInPage( self, media: collections.abc.Collection[ ClientMedia.MediaSingleton ] ):
+        
+        hashes = [ m.GetHash() for m in media ]
+        
+        CG.client_controller.pub( 'imported_files_to_page', hashes, 'duplicate pairs' )
+        
+    
     def _UndoSelectedActioned( self ):
         
         model = self._actioned_pairs_pair_list.model()
-        indices = self._actioned_pairs_pair_list.selectedIndexes()
+        indices = self._actioned_pairs_pair_list.selectionModel().selectedRows()
         
         selected_pairs = { model.GetMediaResultPair( index.row() ) for index in indices }
         
@@ -619,7 +687,7 @@ class ReviewActionsPanel( ClientGUIScrolledPanels.ReviewPanel ):
     def _UndoSelectedDeclined( self ):
         
         model = self._declined_pairs_pair_list.model()
-        indices = self._declined_pairs_pair_list.selectedIndexes()
+        indices = self._declined_pairs_pair_list.selectionModel().selectedRows()
         
         selected_pairs = { model.GetMediaResultPair( index.row() ) for index in indices }
         

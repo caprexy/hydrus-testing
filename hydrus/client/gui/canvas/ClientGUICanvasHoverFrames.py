@@ -17,7 +17,7 @@ from hydrus.client import ClientConstants as CC
 from hydrus.client import ClientData
 from hydrus.client import ClientGlobals as CG
 from hydrus.client import ClientLocation
-from hydrus.client.duplicates import ClientDuplicates
+from hydrus.client.duplicates import ClientDuplicatesComparisonStatements
 from hydrus.client.gui import ClientGUIAsync
 from hydrus.client.gui import ClientGUIDragDrop
 from hydrus.client.gui import ClientGUICore as CGC
@@ -966,12 +966,10 @@ class CanvasHoverFrameTop( CanvasHoverFrame ):
         open_externally.SetToolTipWithShortcuts( 'open externally', CAC.SIMPLE_OPEN_FILE_IN_EXTERNAL_PROGRAM )
         open_externally.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
         
-        # TODO: Rework this to an IconButton etc..
-        drag_button = QW.QPushButton( self )
-        drag_button.setIcon( CC.global_icons().drag )
-        drag_button.setIconSize( QC.QSize( 16, 16 ) )
+        right_click_call = HydrusData.Call( self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_FOCUS_TAB_AND_MEDIA ) )
+        
+        drag_button = ClientGUICommon.IconButtonMultiClickable( self, CC.global_icons().drag, self.DragButtonHit, right_click_call )
         drag_button.setToolTip( ClientGUIFunctions.WrapToolTip( 'drag from here to export file' ) )
-        drag_button.pressed.connect( self.DragButtonHit )
         drag_button.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
         
         close = ClientGUICommon.IconButton( self, CC.global_icons().stop, CG.client_controller.pub, 'canvas_close', self._canvas_key )
@@ -1424,7 +1422,7 @@ class CanvasHoverFrameTopArchiveDeleteFilter( CanvasHoverFrameTop ):
     
     def _PopulateLeftButtons( self ):
         
-        self._back_button = ClientGUICommon.IconButton( self, CC.global_icons().previous, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_ARCHIVE_DELETE_FILTER_BACK ) )
+        self._back_button = ClientGUICommon.IconButton( self, CC.global_icons().position_previous, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_ARCHIVE_DELETE_FILTER_BACK ) )
         self._back_button.SetToolTipWithShortcuts( 'back', CAC.SIMPLE_ARCHIVE_DELETE_FILTER_BACK )
         self._back_button.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
         
@@ -1432,7 +1430,7 @@ class CanvasHoverFrameTopArchiveDeleteFilter( CanvasHoverFrameTop ):
         
         CanvasHoverFrameTop._PopulateLeftButtons( self )
         
-        self._skip_button = ClientGUICommon.IconButton( self, CC.global_icons().next_bmp, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_ARCHIVE_DELETE_FILTER_SKIP ) )
+        self._skip_button = ClientGUICommon.IconButton( self, CC.global_icons().position_next, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_ARCHIVE_DELETE_FILTER_SKIP ) )
         self._skip_button.SetToolTipWithShortcuts( 'skip', CAC.SIMPLE_ARCHIVE_DELETE_FILTER_SKIP )
         self._skip_button.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
         
@@ -1449,13 +1447,13 @@ class CanvasHoverFrameTopNavigable( CanvasHoverFrameTop ):
     
     def _PopulateLeftButtons( self ):
         
-        self._previous_button = ClientGUICommon.IconButton( self, CC.global_icons().previous, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_VIEW_PREVIOUS ) )
+        self._previous_button = ClientGUICommon.IconButton( self, CC.global_icons().position_previous, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_VIEW_PREVIOUS ) )
         self._previous_button.SetToolTipWithShortcuts( 'previous', CAC.SIMPLE_VIEW_PREVIOUS )
         self._previous_button.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
         
         self._index_text = ClientGUICommon.BetterStaticText( self, 'index' )
         
-        self._next_button = ClientGUICommon.IconButton( self, CC.global_icons().next_bmp, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_VIEW_NEXT ) )
+        self._next_button = ClientGUICommon.IconButton( self, CC.global_icons().position_next, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_VIEW_NEXT ) )
         self._next_button.SetToolTipWithShortcuts( 'next', CAC.SIMPLE_VIEW_NEXT )
         self._next_button.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
         
@@ -1468,7 +1466,7 @@ class CanvasHoverFrameTopDuplicatesFilter( CanvasHoverFrameTopNavigable ):
     
     def _PopulateLeftButtons( self ):
         
-        self._first_button = ClientGUICommon.IconButton( self, CC.global_icons().first, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_DUPLICATE_FILTER_BACK ) )
+        self._first_button = ClientGUICommon.IconButton( self, CC.global_icons().position_first, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_DUPLICATE_FILTER_BACK ) )
         self._first_button.SetToolTipWithShortcuts( 'go back a pair', CAC.SIMPLE_DUPLICATE_FILTER_BACK )
         self._first_button.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
         
@@ -1476,7 +1474,7 @@ class CanvasHoverFrameTopDuplicatesFilter( CanvasHoverFrameTopNavigable ):
         
         CanvasHoverFrameTopNavigable._PopulateLeftButtons( self )
         
-        self._last_button = ClientGUICommon.IconButton( self, CC.global_icons().last, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_DUPLICATE_FILTER_SKIP ) )
+        self._last_button = ClientGUICommon.IconButton( self, CC.global_icons().position_last, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_DUPLICATE_FILTER_SKIP ) )
         self._last_button.SetToolTipWithShortcuts( 'show a different pair', CAC.SIMPLE_DUPLICATE_FILTER_SKIP )
         self._last_button.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
         
@@ -1509,11 +1507,12 @@ class CanvasHoverFrameTopDuplicatesFilter( CanvasHoverFrameTopNavigable ):
         CGC.core().PopupMenu( self, menu )
         
     
+
 class CanvasHoverFrameTopNavigableList( CanvasHoverFrameTopNavigable ):
     
     def _PopulateLeftButtons( self ):
         
-        self._first_button = ClientGUICommon.IconButton( self, CC.global_icons().first, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_VIEW_FIRST ) )
+        self._first_button = ClientGUICommon.IconButton( self, CC.global_icons().position_first, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_VIEW_FIRST ) )
         self._first_button.SetToolTipWithShortcuts( 'first', CAC.SIMPLE_VIEW_FIRST )
         self._first_button.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
         
@@ -1521,11 +1520,21 @@ class CanvasHoverFrameTopNavigableList( CanvasHoverFrameTopNavigable ):
         
         CanvasHoverFrameTopNavigable._PopulateLeftButtons( self )
         
-        self._last_button = ClientGUICommon.IconButton( self, CC.global_icons().last, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_VIEW_LAST ) )
+        self._last_button = ClientGUICommon.IconButton( self, CC.global_icons().position_last, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_VIEW_LAST ) )
         self._last_button.SetToolTipWithShortcuts( 'last', CAC.SIMPLE_VIEW_LAST )
         self._last_button.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
         
         QP.AddToLayout( self._top_left_hbox, self._last_button, CC.FLAGS_CENTER_PERPENDICULAR )
+        
+        left_click_call = HydrusData.Call( self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_VIEW_RANDOM ) )
+        right_click_call = HydrusData.Call( self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_UNDO_RANDOM ) )
+        
+        self._random_button = ClientGUICommon.IconButtonMultiClickable( self, CC.global_icons().position_random, left_click_call, right_click_call )
+        
+        self._random_button.setToolTip( 'random - right-click to undo showing random media' )
+        self._random_button.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
+        
+        QP.AddToLayout( self._top_left_hbox, self._random_button, CC.FLAGS_CENTER_PERPENDICULAR )
         
     
 
@@ -2257,17 +2266,19 @@ class CanvasHoverFrameRightDuplicates( CanvasHoverFrame ):
     
     showPairInPage = QC.Signal()
     
-    def __init__( self, parent: QW.QWidget, my_canvas: QW.QWidget, canvas_key: bytes ):
+    def __init__( self, parent: QW.QWidget, my_canvas: QW.QWidget, canvas_key: bytes, show_approve_deny = False ):
         
         super().__init__( parent, my_canvas, canvas_key )
         
         self._always_on_top = True
         
+        self._show_approve_deny = show_approve_deny
+        
         self._current_index_string = ''
         
         self._comparison_media = None
         
-        self._show_in_a_page_button = ClientGUICommon.IconButton( self, CC.global_icons().fullscreen_switch, self.showPairInPage.emit )
+        self._show_in_a_page_button = ClientGUICommon.IconButton( self, CC.global_icons().copy, self.showPairInPage.emit )
         self._show_in_a_page_button.setToolTip( ClientGUIFunctions.WrapToolTip( 'send pair to the duplicates media page, for later processing' ) )
         self._show_in_a_page_button.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
         
@@ -2295,7 +2306,7 @@ class CanvasHoverFrameRightDuplicates( CanvasHoverFrame ):
         close_button.setToolTip( ClientGUIFunctions.WrapToolTip( 'close filter' ) )
         close_button.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
         
-        self._back_a_pair = ClientGUICommon.IconButton( self, CC.global_icons().first, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_DUPLICATE_FILTER_BACK ) )
+        self._back_a_pair = ClientGUICommon.IconButton( self, CC.global_icons().position_first, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_DUPLICATE_FILTER_BACK ) )
         self._back_a_pair.SetToolTipWithShortcuts( 'go back a pair', CAC.SIMPLE_DUPLICATE_FILTER_BACK )
         self._back_a_pair.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
         
@@ -2305,7 +2316,7 @@ class CanvasHoverFrameRightDuplicates( CanvasHoverFrame ):
         self._next_button.SetToolTipWithShortcuts( 'next', CAC.SIMPLE_VIEW_NEXT )
         self._next_button.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
         
-        self._skip_a_pair = ClientGUICommon.IconButton( self, CC.global_icons().last, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_DUPLICATE_FILTER_SKIP ) )
+        self._skip_a_pair = ClientGUICommon.IconButton( self, CC.global_icons().position_last, self.sendApplicationCommand.emit, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_DUPLICATE_FILTER_SKIP ) )
         self._skip_a_pair.SetToolTipWithShortcuts( 'show a different pair', CAC.SIMPLE_DUPLICATE_FILTER_SKIP )
         self._skip_a_pair.setFocusPolicy( QC.Qt.FocusPolicy.TabFocus )
         
@@ -2313,13 +2324,23 @@ class CanvasHoverFrameRightDuplicates( CanvasHoverFrame ):
         
         dupe_boxes = []
         
+        if self._show_approve_deny:
+            
+            dupe_commands = []
+            
+            dupe_commands.append( ( 'approve', 'Approve this pair for the original auto-resolution rule.', CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_DUPLICATE_FILTER_APPROVE_AUTO_RESOLUTION ) ) )
+            dupe_commands.append( ( 'deny', 'Deny this pair for the original auto-resolution rule.', CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_DUPLICATE_FILTER_DENY_AUTO_RESOLUTION ) ) )
+            
+            dupe_boxes.append( ( 'auto-resolution', dupe_commands ) )
+            
+        
         dupe_commands = []
         
         dupe_commands.append( ( 'this is better, and delete the other', 'Set that the current file you are looking at is better than the other in the pair, and set the other file to be deleted.', CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_DUPLICATE_FILTER_THIS_IS_BETTER_AND_DELETE_OTHER ) ) )
         dupe_commands.append( ( 'this is better, but keep both', 'Set that the current file you are looking at is better than the other in the pair, but keep both files.', CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_DUPLICATE_FILTER_THIS_IS_BETTER_BUT_KEEP_BOTH ) ) )
         dupe_commands.append( ( 'they are the same quality', 'Set that the two files are duplicates of very similar quality.', CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_DUPLICATE_FILTER_EXACTLY_THE_SAME ) ) )
         
-        dupe_boxes.append( ( 'they are duplicates', dupe_commands ) )
+        dupe_boxes.append( ( 'set as duplicates', dupe_commands ) )
         
         dupe_commands = []
         
@@ -2565,7 +2586,7 @@ class CanvasHoverFrameRightDuplicates( CanvasHoverFrame ):
             
             ( current_media_result, comparison_media_result ) = args
             
-            ( statements_and_scores, they_are_pixel_duplicates ) = ClientDuplicates.GetDuplicateComparisonStatementsFast( current_media_result, comparison_media_result )
+            ( statements_and_scores, they_are_pixel_duplicates ) = ClientDuplicatesComparisonStatements.GetDuplicateComparisonStatementsFast( current_media_result, comparison_media_result )
             
             return ( statements_and_scores, they_are_pixel_duplicates )
             
@@ -2611,7 +2632,7 @@ class CanvasHoverFrameRightDuplicates( CanvasHoverFrame ):
             
             ( current_media_result, comparison_media_result, they_are_pixel_duplicates ) = args
             
-            statements_and_scores = ClientDuplicates.GetDuplicateComparisonStatementsSlow( current_media_result, comparison_media_result, they_are_pixel_duplicates )
+            statements_and_scores = ClientDuplicatesComparisonStatements.GetDuplicateComparisonStatementsSlow( current_media_result, comparison_media_result, they_are_pixel_duplicates )
             
             return statements_and_scores
             
@@ -2668,6 +2689,16 @@ class CanvasHoverFrameRightDuplicates( CanvasHoverFrame ):
                 if name == 'a_and_b_are_visual_duplicates':
                     
                     tt = f'{statement}\n\nThis uses a custom visual inspection algorithm to try to differentiate resizes/re-encodes vs recolours/alternates. It is pretty good and you can generally trust it. On edge cases, it intentionally errs on the side of false negative.'
+                    st.setToolTip( ClientGUIFunctions.WrapToolTip( tt ) )
+                    
+                elif name == 'jpeg_subsampling':
+                    
+                    tt = f'{statement}\n\nTo save space, jpegs can encode colour data at a lower resolution than light intensity. This is called "subsampling". You do not notice it much, but it does affect image quality, and you generally want to select the higher resolution of subsampling as the "better" of any pair. There are complicated situations where a jpeg can be subsampled and then saved again at a higher quality level (and this is one of the ways you can have a jpeg that is bloated but looks no better), but in general, know that bigger numbers are better:\n\n4:4:4 > 4:2:2 > 4:2:0.\n\nAnything that counts as "unknown" is probably worse. Truly greyscale jpegs (i.e. 8 bits per pixel) have no colour and thus no subsampling.'
+                    st.setToolTip( ClientGUIFunctions.WrapToolTip( tt ) )
+                    
+                elif name == 'jpeg_quality':
+                    
+                    tt = f'{statement}\n\nThis is an estimate based on metadata within the jpeg header. It is not perfect, but it is generally reliable. It will be tricked by a low quality file that is re-saved at a higher quality level.'
                     st.setToolTip( ClientGUIFunctions.WrapToolTip( tt ) )
                     
                 else:

@@ -630,6 +630,9 @@ class Subscription( HydrusSerialisable.SerialisableBaseNamed ):
                             # -------------------------------------------------------
                             # ----------------------
                             
+                            # Note there's another thing to consider, with Pixiv and other multi-file-per-post sites, where the AAAAA 'already in db' are separated in the file log by child posts
+                            # I'm solving this with better culling tech
+                            
                             num_already_in_urls_we_have_seen_so_far = total_already_in_urls_for_this_sync + num_urls_already_in_file_seed_cache_in_this_call
                             most_of_our_stuff = num_master_file_seeds_at_start * 0.95
                             
@@ -935,7 +938,7 @@ class Subscription( HydrusSerialisable.SerialisableBaseNamed ):
             
             query_name = query_header.GetHumanName()
             
-            text_1 = f'downloading files ({HydrusNumbers.ValueRangeToPrettyString( i, num_queries )})'
+            text_1 = f'syncing files ({HydrusNumbers.ValueRangeToPrettyString( i, num_queries )})'
             query_summary_name = self._name
             
             if query_name != self._name:
@@ -1058,14 +1061,14 @@ class Subscription( HydrusSerialisable.SerialisableBaseNamed ):
                         HydrusData.ShowText( 'Query "' + query_name + '" can do no more file work due to running out of unknown urls.' )
                         
                     
-                    break
+                    break # not a cancel, a simple break to stop
                     
                 
                 if job_status.IsCancelled():
                     
                     self._DelayWork( 300, 'recently cancelled' )
                     
-                    break
+                    raise HydrusExceptions.CancelledException( 'User Cancelled!' )
                     
                 
                 p1 = not self._CanDoWorkNow()
@@ -1109,7 +1112,7 @@ class Subscription( HydrusSerialisable.SerialisableBaseNamed ):
                             
                         
                     
-                    break
+                    raise HydrusExceptions.CancelledException( 'Stopping work early!' )
                     
                 
                 try:

@@ -4,11 +4,11 @@ title: Running From Source
 
 # running from source
 
-I write the client and server entirely in [python](https://python.org), which can run straight from source. It is getting simpler and simpler to run python programs like this, so don't be afraid of it. If none of the built packages work for you (for instance if you use Windows 8.1 or 18.04 Ubuntu (or equivalent)), it may be the only way you can get the program to run. Also, if you have a general interest in exploring the code or wish to otherwise modify the program, you will obviously need to do this.
+I write the client and server entirely in [python](https://python.org), which can run straight from source. It is getting simpler and simpler to run python programs like this, so don't be afraid of it. The program generally works better from source than from a built release. If none of the builds work for you (for instance if you use Windows 8.1 or 18.04 Ubuntu (or equivalent), and since 2025-09 any macOS situation), it may be the only way you can get the program to run. Also, if you have a general interest in exploring the code or wish to otherwise modify the program, you will obviously need to do this.
 
 ## Simple Setup Guide
 
-There are now setup scripts that make this easy on Windows and Linux. You do not need any python experience.
+There are now setup scripts that make this easy. You do not need any python experience.
 
 ### Summary:
 
@@ -94,6 +94,8 @@ There are now setup scripts that make this easy on Windows and Linux. You do not
 
 === "macOS"
 
+    _If you are currently on the old App and need to migrate to a source install, get a test situation running and then scroll down to the [migrating from an existing install](#migrating_from_an_existing_install) section._
+    
     You may not have git already, so open a new terminal and check with:
     
     `git --version`
@@ -127,9 +129,9 @@ If Git is not available, then just go to the [latest release](https://github.com
 We will call the base extract directory, the one with 'hydrus_client.py' in it, `install_dir`.
 
 !!! warning "Mixed Builds"
-    Don't mix and match build extracts and source extracts. The process that runs the code gets confused if there are unexpected extra .dlls in the directory. **If you need to convert between built and source releases, perform a [clean install](getting_started_installing.md#clean_installs).**  
+    Don't mix and match build extracts and source extracts. The process that runs the code gets confused if there are unexpected extra .dlls in the directory. You will want to set up an entirely new install situation and then move your database dir from the old to the new. [More here](#migrating_from_an_existing_install).  
     
-    If you are converting from one install type to another, make a backup before you start. Then, if it all goes wrong, you'll always have a safe backup to rollback to.
+    **If you are converting from one install type to another, make a backup before you start.** Then, if it all goes wrong, you'll always have a safe backup to rollback to.
 
 #### Built Programs
 
@@ -179,14 +181,14 @@ There are three special external libraries. You just have to get them and put th
         
     3. FFMPEG  
         
-        You should already have ffmpeg, but double-check: just type `ffmpeg` into a new terminal, and it should give a basic version response. If you don't have it, check your package manager.
+        You should already have ffmpeg, but we should double-check: just type `ffmpeg` into a new terminal, and it should give a basic version response. If you don't have it, check your package manager.
         
 
 === "macOS"
 
     1. mpv  
         
-        Unfortunately, mpv is not well supported in macOS yet. You may be able to install it in brew, but it seems to freeze the client as soon as it is loaded. Hydev is thinking about fixes here.
+        Unfortunately, mpv is not well supported in macOS yet. You may be able to install `libmpv` in brew, but it seems to freeze the client as soon as it is loaded. If `help->about` seems to suggest mpv loaded ok, I still recommend you set your `options->media playback` settings to 'show with native viewer' and not mpv. There may be macOS mpv support in future.
         
     2. SQLite3  
         
@@ -194,7 +196,9 @@ There are three special external libraries. You just have to get them and put th
         
     3. FFMPEG  
         
-        You should already have ffmpeg.
+        You should already have ffmpeg, but we should double-check: just type `ffmpeg` into a new terminal, and it should give a basic version response. If you don't have it, you are probably looking at:
+        
+        `brew install ffmpeg`
         
 
 #### Environment setup
@@ -220,7 +224,8 @@ There are three special external libraries. You just have to get them and put th
     
     You will likely have to do the same on the other .sh files.
     
-    If you like, you can run the `setup_desktop.sh` file to install an io.github.hydrusnetwork.hydrus.desktop file to your applications folder. (Or check the template in `install_dir/static/io.github.hydrusnetwork.hydrus.desktop` and do it yourself!)
+    !!! info "Desktop File"
+        If you like, you can later run the `setup_desktop.sh` file to install an io.github.hydrusnetwork.hydrus.desktop file to your applications folder. (Or check the template in `install_dir/static/io.github.hydrusnetwork.hydrus.desktop` and do it yourself!)
     
 
 === "macOS"
@@ -236,7 +241,7 @@ There are three special external libraries. You just have to get them and put th
     
     You will likely have to do the same on the other .command files.
     
-    You may need to experiment with the advanced choices, especially if your macOS is a litle old.
+    If your macOS is old, you may need to experiment with the advanced choices.
     
 
 The setup will ask you some questions. Just type the letters it asks for and hit enter. Most users are looking at the (s)imple setup, but if your situation is unusual, try the (a)dvanced, which will walk you through the main decisions. Once ready, it should take a minute to download its packages and a couple minutes to install them. Do not close it until it is finished installing everything and says 'Done!'. If it seems like it hung, just give it time to finish.
@@ -310,7 +315,9 @@ The first start will take a little longer (it has to compile all the code into s
 
 ### Have Fun
 
-If everything boots ok, great! Have a play around with the client and make sure file imports work ok and that mpv is all correct.
+If everything boots ok, great! Have a play around with the client and make sure file imports work ok and, if you are not macOS, that mpv is all correct.
+
+Don't forget to create a new shortcut to your `hydrus_client` or `hydrus_client-user` launch script. If you can, set a custom icon--there are several `hydrus...` files in `install_dir/static` that are suitable.
 
 ??? note "System Qt styles"
     
@@ -330,27 +337,40 @@ If you get a library version error when you try to boot, run the venv setup agai
 
 ### Migrating from an Existing Install
 
-Many users start out using one of the official built releases and decide to move to source. There is lots of information [here](database_migration.md) about how to migrate the database, but for your purposes, the simple method is this:
+Many users start out using one of the official built releases and decide to move to source. There is a full document [here](database_migration.md) about how to migrate a database, but for your purposes, the simple method is:
 
 **If you never moved your database to another place and do not use -d/--db_dir launch parameter**
 
-1. Follow the above guide to get the source install working in a new folder on a fresh database
+1. Follow the above guide to get the "running from source" install working in a new folder on a fresh database
 2. **MAKE A BACKUP OF EVERYTHING**
-3. Delete any test database you made from the source install's `db` directory.
-4. Move your built release's entire `db` directory to the now-clear source `db` directory.
-5. Run your source release again--it should load your old db no problem!
-6. Move things around, or update your backup routine to point to the new source install location.
+3. Delete any test database you made from the "running from source" install's `db` directory.
+4. Move your built release's entire `db` directory to the now-clear "running from source" install's `db` directory.
+5. Run your "running from source" install again--it should load your old db no problem!
+6. Update your backup routine to point to the new "running from source" install location.
 
 **If you moved your database to another location and use the -d/--db_dir launch parameter**
 
-1. Follow the above guide to get the source install working in a new folder on a fresh database (without -db_dir)
+1. Follow the above guide to get the "running from source" install working in a new folder on a fresh database (without --db_dir)
 2. **MAKE A BACKUP OF EVERYTHING**
-3. Just to be neat, delete any test database you made from the source install's `db` directory.
-4. Run the source install with --db_dir just as you would the built executable--it should load your old db no problem!
+3. Just to be neat, delete any test database you made from the "running from source" install's `db` directory.
+4. Run the "running from source" install with --db_dir just as you would the built executable--it should load your old db no problem!
+
+**If you are currently on the macOS App.**
+
+_Your App's database should be in `~/Library/Hydrus` (i.e `/Users/[You]/Library/Hydrus`. You can also hit up `file->open->database directory` in the client to make sure.)._
+
+1. Follow the above guide to get the "running from source" install working in a new folder on a fresh database.
+2. **MAKE A BACKUP OF EVERYTHING**
+3. Delete any test database you made from the "running from source" install's `db` directory.
+4. Move the contents of `~/Library/Hydrus` to your "running from source" install's `db` directory.
+5. Run your "running from source" install again--it should load your old db no problem!
+6. Update your backup routine to point to the new "running from source" install location.
+
+_Note that these jobs are essentially the same as making a [clean install](getting_started_installing.md#clean_installs) in a new location._
 
 ### Moving Your Install Directory
 
-The venv directory that holds your private copy of python contains absolute path references to itself. If you move your source install directory somewhere, trying to launch hydrus will give you an error about 'python' being missing.
+The venv directory holds a private copy of python, and it contains absolute path references to itself. If you move your source install directory somewhere, trying to launch hydrus will give you an error about 'python' being missing.
 
 **If you move your install directory, you have to build a new venv.** Just double-click the setup_venv script again, and you'll be back in a couple minutes.
 
@@ -530,3 +550,5 @@ I use Windows and Linux, but I have much more experience with Windows, and the p
 My coding style is unusual and unprofessional. Everything is pretty much hacked together. I'm constantly throwing new code together and then cleaning and overhauling it down the line. If you are interested in how things work, please do look through the source and ask me if you don't understand something.
 
 I work strictly alone, however. While I am very interested in bug reports or suggestions for good libraries to use, I am not looking for pull requests or suggestions on refactoring. I know a lot of things are a mess. Everything I do is [WTFPL](https://github.com/sirkris/WTFPL/blob/master/WTFPL.md), so feel free to fork and play around with things on your end as much as you like.
+
+[This DeepWiki AI Crawl](https://deepwiki.com/hydrusnetwork/hydrus) of the Hydrus Github repository is not totally comprehensive, but I was impressed with how generally accurate it is. It attributes more thought on my part than actually happened, hahaha, but you might like to check it if you want to poke around.
