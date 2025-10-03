@@ -374,15 +374,28 @@ class StringConverter( StringProcessingStep ):
                     
                     if timezone in ( HC.TIMEZONE_UTC, HC.TIMEZONE_OFFSET ):
                         
-                        dt = datetime.datetime(
-                            dt.year,
-                            dt.month,
-                            dt.day,
-                            dt.hour,
-                            dt.minute,
-                            dt.second,
-                            tzinfo = datetime.timezone.utc
-                        )
+                        # Create UTC datetime with compatibility fallback
+                        try:
+                            dt = datetime.datetime(
+                                dt.year,
+                                dt.month,
+                                dt.day,
+                                dt.hour,
+                                dt.minute,
+                                dt.second,
+                                tzinfo = datetime.timezone.utc
+                            )
+                        except AttributeError:
+                            # Fallback for older Python versions - create timezone-naive datetime
+                            # and handle UTC conversion in DateTimeToTimestamp
+                            dt = datetime.datetime(
+                                dt.year,
+                                dt.month,
+                                dt.day,
+                                dt.hour,
+                                dt.minute,
+                                dt.second
+                            )
                         
                         if timezone == HC.TIMEZONE_OFFSET:
                             
