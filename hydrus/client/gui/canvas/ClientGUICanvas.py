@@ -1986,13 +1986,27 @@ class CanvasPanelWithHovers( CanvasPanel ):
             #     self._DrawTopMiddle( painter )
                 
             
+            current_y = 0
+            
             if new_options.GetBoolean( 'draw_top_right_hover_in_preview_window_background' ):
                 
                 current_y = self._DrawTopRight( painter )
                 
-            # else:
+            else:
                 
-            #     current_y = 0
+                # Even if top-right hover is not drawn, we need to calculate where it would end
+                # to position the CBZ indicator correctly
+                if self._current_media.GetMime() == HC.APPLICATION_CBZ:
+                    
+                    # Calculate approximate position where top-right content would end
+                    # This includes ratings, location strings, etc.
+                    current_y = self._CalculateTopRightContentHeight()
+                    
+            
+            # Draw CBZ indicator for CBZ files below the top-right content
+            if self._current_media.GetMime() == HC.APPLICATION_CBZ:
+                
+                self._DrawCBZIndicator( painter, current_y )
                 
             
             # if new_options.GetBoolean( 'draw_notes_hover_in_preview_window_background' ):
@@ -2186,6 +2200,98 @@ class CanvasPanelWithHovers( CanvasPanel ):
             # flying completely by my pants here
             
             current_y -= VBOX_MARGIN
+            
+        
+        current_y += VBOX_MARGIN + QFRAME_PADDING
+        
+        return current_y
+        
+    
+    def _DrawCBZIndicator( self, painter: QG.QPainter, start_y: int = 0 ):
+        
+        # Draw a CBZ indicator below the top-right content
+        my_size = self.size()
+        my_width = my_size.width()
+        
+        cbz_text = 'CBZ'
+        
+        # Set up the font and get text size
+        font = painter.font()
+        font.setBold( True )
+        font.setPointSize( 10 )
+        painter.setFont( font )
+        
+        ( text_size, cbz_text ) = ClientGUIFunctions.GetTextSizeFromPainter( painter, cbz_text )
+        
+        # Position below the top-right content with some padding
+        padding = 8
+        x = my_width - text_size.width() - padding
+        y = start_y + 5  # Add some spacing below the top-right content
+        
+        # Draw background rectangle
+        rect = QC.QRect( x - 4, y - 2, text_size.width() + 8, text_size.height() + 4 )
+        
+        # Set background color (blue)
+        painter.fillRect( rect, QG.QColor( 74, 144, 226 ) )  # #4a90e2
+        
+        # Set text color (white)
+        painter.setPen( QG.QColor( 255, 255, 255 ) )
+        
+        # Draw the text
+        ClientGUIFunctions.DrawText( painter, x, y, cbz_text )
+        
+    
+    def _CalculateTopRightContentHeight( self ) -> int:
+        
+        # Calculate approximate height where top-right content would end
+        # This is a simplified calculation to position CBZ indicator correctly
+        
+        try:
+            
+            QFRAME_PADDING = self._top_right_hover.frameWidth()
+            ( VBOX_SPACING, VBOX_MARGIN ) = self._top_right_hover.GetVboxSpacingAndMargin()
+            
+        except:
+            
+            QFRAME_PADDING = 2
+            ( VBOX_SPACING, VBOX_MARGIN ) = ( 2, 2 )
+            
+        
+        current_y = QFRAME_PADDING + VBOX_MARGIN + round( ClientGUIPainterShapes.PAD_PX / 2 )
+        
+        # Add approximate height for ratings (if any)
+        services_manager = CG.client_controller.services_manager
+        like_services = services_manager.GetServices( ( HC.LOCAL_RATING_LIKE, ) )
+        numerical_services = services_manager.GetServices( ( HC.LOCAL_RATING_NUMERICAL, ) )
+        
+        if len( like_services ) > 0:
+            
+            RATING_ICON_SET_SIZE = round( self._new_options.GetFloat( 'preview_window_rating_icon_size_px' ) )
+            current_y += RATING_ICON_SET_SIZE + VBOX_SPACING
+            
+        
+        if len( numerical_services ) > 0:
+            
+            RATING_ICON_SET_SIZE = round( self._new_options.GetFloat( 'preview_window_rating_icon_size_px' ) )
+            current_y += RATING_ICON_SET_SIZE + VBOX_SPACING
+            
+        
+        # Add approximate height for location strings
+        location_strings = self._current_media.GetLocationsManager().GetLocationStrings()
+        
+        if len( location_strings ) > 0:
+            
+            # Approximate text height
+            current_y += 15 * len( location_strings ) + VBOX_SPACING
+            
+        
+        # Add approximate height for URLs
+        urls = self._current_media.GetLocationsManager().GetURLs()
+        
+        if len( urls ) > 0:
+            
+            # Approximate text height for URLs
+            current_y += 15 * min( len( urls ), 3 ) + VBOX_SPACING  # Limit to 3 URLs for estimation
             
         
         current_y += VBOX_MARGIN + QFRAME_PADDING
