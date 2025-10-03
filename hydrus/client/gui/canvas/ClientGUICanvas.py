@@ -1896,7 +1896,6 @@ class CanvasPanel( Canvas ):
         
         # Trigger prefetch when media is set in preview pane
         if media is not None:
-            print("testbest")
             self._PrefetchNeighbours()
         
     
@@ -3262,7 +3261,6 @@ class CanvasMediaList( CanvasWithHovers ):
     def _PrefetchNeighbours( self ):
         
         media_looked_at = set()
-        print("zzzsx")
         
         to_render = []
         
