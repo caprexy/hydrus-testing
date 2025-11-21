@@ -2326,7 +2326,7 @@ class Thumbnail( Selectable ):
             # Position in top-left corner with some padding
             cbz_padding = 3
             cbz_x = thumbnail_border + cbz_padding
-            cbz_y = thumbnail_border + cbz_padding
+            cbz_y = height - thumbnail_border - cbz_padding - cbz_text_size.height()    
             
             # Draw background rectangle
             cbz_rect = QC.QRect( cbz_x - 2, cbz_y - 1, cbz_text_size.width() + 4, cbz_text_size.height() + 2 )
