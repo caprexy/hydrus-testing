@@ -2285,7 +2285,9 @@ class Thumbnail( Selectable ):
         media_panel_background_colour = media_panel.GetColour( background_colour_type )
         
         painter.fillRect( thumbnail_border, thumbnail_border, width - ( thumbnail_border * 2 ), height - ( thumbnail_border * 2 ), media_panel_background_colour )
-        
+        if inbox:
+            background_colour = QG.QColor(29, 130, 0)
+            painter.fillRect(0, 0, width, height, background_colour)
         raw_thumbnail_qt_image = thumbnail_hydrus_bmp.GetQtImage()
         
         thumbnail_dpr_percent = new_options.GetInteger( 'thumbnail_dpr_percent' )
