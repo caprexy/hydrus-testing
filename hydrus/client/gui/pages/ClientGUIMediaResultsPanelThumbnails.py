@@ -2321,6 +2321,10 @@ class Thumbnail( Selectable ):
         
         painter.fillRect( thumbnail_border, thumbnail_border, width - ( thumbnail_border * 2 ), height - ( thumbnail_border * 2 ), media_panel_background_colour )
         
+        if inbox:
+            background_colour = QG.QColor(29, 130, 0)
+            painter.fillRect(0, 0, width, height, background_colour)
+            
         try:
             
             raw_thumbnail_qt_image = thumbnail_hydrus_bmp.GetQtImage()
@@ -2357,6 +2361,40 @@ class Thumbnail( Selectable ):
         
         painter.drawImage( x_offset, y_offset, raw_thumbnail_qt_image )
         
+        # Draw CBZ indicator for CBZ files
+        if media.GetMime() == HC.APPLICATION_CBZ:
+
+            cbz_text = 'CBZ'
+
+            # Set up font for CBZ indicator
+            cbz_font = QG.QFont( painter.font() )
+            cbz_font.setBold( True )
+            cbz_font.setPointSize( 8 )  # Smaller font for thumbnails
+            painter.setFont( cbz_font )
+
+            ( cbz_text_size, cbz_text ) = ClientGUIFunctions.GetTextSizeFromPainter( painter, cbz_text )
+
+            # Position in top-left corner with some padding
+            cbz_padding = 3
+            cbz_x = thumbnail_border + cbz_padding
+            cbz_y = height - thumbnail_border - cbz_padding - cbz_text_size.height()    
+
+            # Draw background rectangle
+            cbz_rect = QC.QRect( cbz_x - 2, cbz_y - 1, cbz_text_size.width() + 4, cbz_text_size.height() + 2 )
+
+            # Set background color (blue)
+            painter.fillRect( cbz_rect, QG.QColor( 74, 144, 226 ) )  # #4a90e2
+
+            # Set text color (white)
+            painter.setPen( QG.QColor( 255, 255, 255 ) )
+
+            # Draw the text
+            ClientGUIFunctions.DrawText( painter, cbz_x, cbz_y, cbz_text )
+
+            # Reset font and pen
+            painter.setFont( f )
+            painter.setPen( qss_text_colour )
+            
         TEXT_BORDER = 1
         
         tags = media.GetTagsManager().GetCurrentAndPending( CC.COMBINED_TAG_SERVICE_KEY, ClientTags.TAG_DISPLAY_SINGLE_MEDIA )
@@ -2443,6 +2481,7 @@ class Thumbnail( Selectable ):
                 if self._selected:
                     
                     border_colour_type = CC.COLOUR_THUMB_BORDER_REMOTE_SELECTED
+                    thumbnail_border = 5
                     
                 else:
                     
@@ -2454,6 +2493,7 @@ class Thumbnail( Selectable ):
                 if self._selected:
                     
                     border_colour_type = CC.COLOUR_THUMB_BORDER_SELECTED
+                    thumbnail_border = 5
                     
                 else:
                     

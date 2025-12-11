@@ -352,39 +352,7 @@ def ZipLooksLikeCBZ( path_to_zip ):
             with zip_handle.open( path ) as reader:
                 
                 reader.read()
-                
-            
-        except:
-            
-            return False
-            
-        
-    
-    if len( directories_to_image_filenames ) > 0:
-        
-        directories_to_looks_good_scores = {}
-        
-        for ( directory_path, image_filenames ) in directories_to_image_filenames.items():
-            
-            # ok, so a zip that has fifteen different filename styles is not a cbz
-            # one that is all "Coolguy Adventures-c4-p001.jpg" however is!
-            
-            # so let's take all the numbers and figure out how commonly the image filenames are templated
-            
-            unique_numberless_filenames = { re.sub( r'\d', '', filename ) for filename in image_filenames }
-            
-            magical_uniqueness_percentage = ( len( unique_numberless_filenames ) - 1 ) / len( image_filenames )
-            
-            directories_to_looks_good_scores[ directory_path ] = magical_uniqueness_percentage
-            
-        
-        all_percentages = list( directories_to_looks_good_scores.values() )
-        
-        average_directory_good = sum( all_percentages ) / len( all_percentages )
-        
-        # experimentally, I haven't seen this go above 0.103 on a legit cbz
-        if average_directory_good > 0.2:
-            
+        except Exception as e:
             return False
             
         

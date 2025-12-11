@@ -356,15 +356,40 @@ class RatingNumericalCanvas( ClientGUIRatings.RatingNumericalControl ):
         
     
     def _SetRating( self, rating ):
-        
-        super()._SetRating( rating )
-        
-        if self._current_media is not None and rating is not None:
-            
-            content_update = ClientContentUpdates.ContentUpdate( HC.CONTENT_TYPE_RATINGS, HC.CONTENT_UPDATE_ADD, ( rating, self._hashes ) )
-            
-            CG.client_controller.Write( 'content_updates', ClientContentUpdates.ContentUpdatePackage.STATICCreateFromContentUpdate( self._service_key, content_update ) )
-            
+        canvasHoverFrameTopRight   = self.parentWidget()
+        canvasPanelWithHovers      = canvasHoverFrameTopRight.widget_parent
+        qframe                     = canvasPanelWithHovers.parentWidget()
+        qframe_parent              = qframe.parentWidget()
+        qframe_parent_parent       = qframe_parent.parentWidget()
+        qframe_parent_parent_parent = qframe_parent_parent.parentWidget()
+
+        page = qframe_parent_parent_parent
+
+        from hydrus.client.gui.pages.ClientGUIMediaResultsPanelThumbnails import MediaResultsPanelThumbnails
+        thumb_panel = page.findChild(
+            MediaResultsPanelThumbnails,
+            'HydrusMediaList'
+        )
+
+        selected_media = thumb_panel._selected_media
+
+        # Apply the rating to all selected media
+        for media in selected_media:
+            self._current_media = media
+            self._hashes = {media.GetHash()}  # Make sure _hashes is a set of hashes
+            super()._SetRating(rating)  # This will call the parent logic (draw + tooltip update)
+
+            # Update content_updates so RatingsManager/database sees it
+            if self._current_media is not None and rating is not None:
+                content_update = ClientContentUpdates.ContentUpdate(
+                    HC.CONTENT_TYPE_RATINGS,
+                    HC.CONTENT_UPDATE_ADD,
+                    (rating, self._hashes)
+                )
+                CG.client_controller.Write(
+                    'content_updates',
+                    ClientContentUpdates.ContentUpdatePackage.STATICCreateFromContentUpdate(self._service_key, content_update)
+                )
         
     
     def ClearMedia( self ):
@@ -1599,7 +1624,8 @@ class CanvasHoverFrameTopRight( CanvasHoverFrame ):
     def __init__( self, parent, my_canvas, top_hover: CanvasHoverFrameTop, canvas_key ):
         
         super().__init__( parent, my_canvas, canvas_key )
-        
+        self.widget_parent = parent
+        self.my_canvas = my_canvas
         self._top_hover = top_hover
         
         self._spacing = 2

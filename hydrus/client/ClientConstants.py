@@ -249,7 +249,11 @@ for mime in HC.SEARCHABLE_MIMES:
     elif mime in HC.IMAGES:
         
         media_viewer_capabilities[ mime ] = static_full_support
-        
+
+    elif mime in HC.APPLICATIONS_WITH_THUMBNAILS:
+
+        media_viewer_capabilities[ mime ] = static_full_support
+
     elif mime in HC.VIDEO:
         
         media_viewer_capabilities[ mime ] = animated_full_support

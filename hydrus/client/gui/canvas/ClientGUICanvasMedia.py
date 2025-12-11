@@ -1509,6 +1509,9 @@ class MediaContainer( QW.QWidget ):
         
         self._static_image_window.readyForNeighbourPrefetch.connect( self.readyForNeighbourPrefetch )
         
+        self._cbz_thumbnail_viewer = CBZThumbnailViewer( self, self._background_colour_generator )
+        self._cbz_thumbnail_viewer.readyForNeighbourPrefetch.connect( self.readyForNeighbourPrefetch )
+        
         self._controls_bar = QW.QWidget( self )
         self._controls_bar_show_full = True
         
@@ -1536,6 +1539,7 @@ class MediaContainer( QW.QWidget ):
         self._controls_bar.hide()
         
         self._static_image_window.hide()
+        self._cbz_thumbnail_viewer.hide()
         self._embed_button.hide()
         
         self.hide()
@@ -1565,20 +1569,11 @@ class MediaContainer( QW.QWidget ):
         
         if media_window is not None:
             
-            launch_media_viewer_classes = ( Animation, ClientGUIMPV.MPVWidget, StaticImage, QtMediaPlayer )
+            launch_media_viewer_classes = ( Animation, ClientGUIMPV.MPVWidget, StaticImage, QtMediaPlayer, CBZThumbnailViewer )
             
             media_window.removeEventFilter( self._additional_event_filter )
             
             if isinstance( media_window, launch_media_viewer_classes ):
-                
-                try:
-                    
-                    media_window.launchMediaViewer.disconnect( self.launchMediaViewer )
-                    
-                except RuntimeError:
-                    
-                    pass # lmao, weird 'Failed to disconnect signal launchMediaViewer()' error I couldn't figure out, I guess some out-of-order deleteLater gubbins
-                    
                 
                 media_window.ClearMedia()
                 
@@ -1672,8 +1667,20 @@ class MediaContainer( QW.QWidget ):
             self._media_window = OpenExternallyPanel( self, self._media )
             
         elif self._show_action == CC.MEDIA_VIEWER_ACTION_SHOW_WITH_NATIVE:
-            
-            if self._media.IsStaticImage():
+
+            if self._media.GetMime() == HC.APPLICATION_CBZ:
+
+                if isinstance( self._media_window, CBZThumbnailViewer ):
+
+                    self._media_window.hide()
+
+                else:
+
+                    self._media_window = self._cbz_thumbnail_viewer
+
+                self._media_window.SetMedia( self._media )
+                
+            elif self._media.IsStaticImage():
                 
                 if None in self._media.GetResolution():
                     
@@ -4130,3 +4137,191 @@ class StaticImage( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
             
         
     
+class CBZThumbnailViewer( QW.QWidget ):
+    
+    launchMediaViewer = QC.Signal()
+    readyForNeighbourPrefetch = QC.Signal()
+    
+    def __init__( self, parent, background_colour_generator ):
+        
+        super().__init__( parent )
+        
+        self._background_colour_generator = background_colour_generator
+        self._media = None
+        self._thumbnail_qt_pixmap = None
+        
+        # Double-click detection
+        self._last_click_time = 0
+        self._double_click_threshold = 500  # milliseconds
+        
+        self.setSizePolicy( QW.QSizePolicy.Policy.Expanding, QW.QSizePolicy.Policy.Expanding )
+        
+    def SetMedia(self, media):
+        self._media = media
+        self._thumbnail_qt_pixmap = None
+        
+        if media is not None and media.GetMime() == HC.APPLICATION_CBZ:
+            try:
+                hash = media.GetHash()
+                mime = media.GetMime()
+                client_files_manager = CG.client_controller.client_files_manager
+                path = client_files_manager.GetFilePath(hash, mime)
+                
+                import zipfile
+                from PIL import Image
+                from PIL.ImageQt import ImageQt
+                
+                with zipfile.ZipFile(path, 'r') as cbz:
+                    # filter image files
+                    image_files = [f for f in cbz.namelist() if f.lower().endswith(('.jpg','.jpeg','.png','.gif','.bmp','.webp'))]
+                    if image_files:
+                        image_files.sort()
+                        first_image = image_files[0]
+                        with cbz.open(first_image) as img_file:
+                            pil_image = Image.open(img_file)
+                            if pil_image.mode != 'RGB':
+                                pil_image = pil_image.convert('RGB')
+                            
+                            max_size = 1200
+                            if pil_image.width > max_size or pil_image.height > max_size:
+                                pil_image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+                            
+                            # Use ImageQt for safe QImage conversion
+                            self._thumbnail_qt_pixmap = QG.QPixmap.fromImage(ImageQt(pil_image))
+            
+            except Exception as e:
+                HydrusData.PrintException(e)
+                self._thumbnail_qt_pixmap = None
+        
+        self.update()
+        self.readyForNeighbourPrefetch.emit()
+        
+    
+    def paintEvent( self, event ):
+        
+        painter = QG.QPainter( self )
+        
+        # Draw background
+        colour = self._background_colour_generator.GetColour()
+        painter.setBackground( QG.QBrush( colour ) )
+        painter.eraseRect( painter.viewport() )
+        
+        if self._thumbnail_qt_pixmap is not None:
+            
+            # Scale pixmap to fit widget while maintaining aspect ratio
+            widget_size = self.size()
+            pixmap_size = self._thumbnail_qt_pixmap.size()
+            
+            # Calculate scaling to fit within widget
+            scale_x = widget_size.width() / pixmap_size.width()
+            scale_y = widget_size.height() / pixmap_size.height()
+            scale = min( scale_x, scale_y )
+            
+            # Calculate new size and position
+            new_width = int( pixmap_size.width() * scale )
+            new_height = int( pixmap_size.height() * scale )
+            
+            x = ( widget_size.width() - new_width ) // 2
+            y = ( widget_size.height() - new_height ) // 2
+            
+            # Draw the scaled pixmap
+            target_rect = QC.QRect( x, y, new_width, new_height )
+            painter.drawPixmap( target_rect, self._thumbnail_qt_pixmap )
+            
+        else:
+            
+            # Draw placeholder text
+            painter.setPen( QG.QPen( QG.QColor( 128, 128, 128 ) ) )
+            painter.drawText( self.rect(), QC.Qt.AlignmentFlag.AlignCenter, "CBZ Preview" )
+            
+        
+    
+    def enterEvent( self, event ):
+        
+        self.setCursor( QG.QCursor( QC.Qt.CursorShape.PointingHandCursor ) )
+        
+        super().enterEvent( event )
+        
+    
+    def leaveEvent( self, event ):
+        
+        self.setCursor( QG.QCursor( QC.Qt.CursorShape.ArrowCursor ) )
+        
+        super().leaveEvent( event )
+        
+    
+    def mousePressEvent( self, event ):
+        
+        # Accept the event to prevent parent from handling it
+        event.accept()
+        
+        if event.button() == QC.Qt.MouseButton.LeftButton and self._media is not None:
+            
+            import time
+            current_time = int( time.time() * 1000 )  # milliseconds
+            
+            if current_time - self._last_click_time < self._double_click_threshold:
+                
+                self._LaunchCBZExternally()
+                self._last_click_time = 0  # Reset to prevent triple-click
+                return  # Don't call parent
+                
+            else:
+                
+                self._last_click_time = current_time
+                
+        elif event.button() == QC.Qt.MouseButton.RightButton and self._media is not None:
+            
+            self._LaunchCBZExternally()
+            return
+                
+        
+        # Don't call super() to prevent parent from handling the event
+        
+    
+    def mouseReleaseEvent( self, event ):
+        
+        event.accept()
+        
+        # Don't call super() to prevent parent from handling the event
+        
+    
+    def mouseDoubleClickEvent( self, event ):
+        
+        event.accept()
+        
+        if event.button() == QC.Qt.MouseButton.LeftButton and self._media is not None:
+            
+            self._LaunchCBZExternally()
+            
+        
+        # Don't call super() to prevent parent from handling the event
+            
+        
+    
+    def _LaunchCBZExternally( self ):
+        
+        if self._media is None:
+            
+            return
+            
+        
+        hash = self._media.GetHash()
+        mime = self._media.GetMime()
+        
+        client_files_manager = CG.client_controller.client_files_manager
+        
+        path = client_files_manager.GetFilePath( hash, mime )
+        
+        new_options = CG.client_controller.new_options
+        
+        launch_path = new_options.GetMimeLaunch( mime )
+        
+        HydrusPaths.LaunchFile( path, launch_path )
+        
+    
+    def ClearMedia( self ):
+        
+        self._media = None
+        self._thumbnail_qt_pixmap = None
+        self.update()

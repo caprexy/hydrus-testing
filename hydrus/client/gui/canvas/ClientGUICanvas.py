@@ -629,8 +629,91 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
             
             ClientGUIMediaModalActions.DoOpenKnownURLFromShortcut( self, self._current_media )
             
+    def _PrefetchNeighbours(self):
+
+        # find the media results panel to get the media list
+        parent = self.parent()
         
-    
+        while parent is not None:
+            if hasattr(parent, '_media_panel') and parent._media_panel is not None:
+                media_panel = parent._media_panel
+                break
+            parent = parent.parent()
+        else:
+            return
+        
+        if not hasattr(media_panel, '_sorted_media') or self._current_media is None:
+            return
+        
+        media_list = media_panel._sorted_media
+        
+        # where am I?
+        try:
+            current_index = media_list.index(self._current_media)
+        except ValueError:
+            return
+        
+        media_looked_at = set()
+        delay_base = HydrusTime.SecondiseMSFloat(
+            CG.client_controller.new_options.GetInteger(
+                'media_viewer_prefetch_delay_base_ms'
+            )
+        )
+        
+        num_to_go_back = CG.client_controller.new_options.GetInteger(
+            'media_viewer_prefetch_num_previous'
+        )
+        num_to_go_forward = CG.client_controller.new_options.GetInteger(
+            'media_viewer_prefetch_num_next'
+        )
+        
+        # ---- gather which items to prefetch ----
+        prefetch_targets = []   # list of (media_result, delay)
+        
+        # forward
+        for i in range(num_to_go_forward):
+            next_index = (current_index + i + 1) % len(media_list)
+            next_media = media_list[next_index]
+            
+            if next_media in media_looked_at:
+                break
+            
+            media_looked_at.add(next_media)
+            media_result = next_media.GetMediaResult()
+            if media_result is None or media_result.GetMime() not in HC.IMAGES:
+                continue
+            
+            delay = delay_base * (i + 1)
+            prefetch_targets.append((media_result, delay))
+        
+        # backward
+        for i in range(num_to_go_back):
+            prev_index = (current_index - i - 1) % len(media_list)
+            prev_media = media_list[prev_index]
+            
+            if prev_media in media_looked_at:
+                break
+            
+            media_looked_at.add(prev_media)
+            media_result = prev_media.GetMediaResult()
+            if media_result is None or media_result.GetMime() not in HC.IMAGES:
+                continue
+            
+            delay = delay_base * 2 * (i + 1)
+            prefetch_targets.append((media_result, delay))
+        
+        # ---- schedule the prefetch calls ----
+        images_cache = CG.client_controller.images_cache
+        
+        for media_result, delay in prefetch_targets:
+            CG.client_controller.CallLaterQtSafe(
+                self,
+                delay,
+                'image pre-fetch',
+                lambda mr=media_result: images_cache.PrefetchImageRenderers([mr])
+            )
+
+
     def _SaveCurrentMediaViewTime( self ):
         
         now_ms = HydrusTime.GetNowMS()
@@ -1879,6 +1962,9 @@ class CanvasPanel( Canvas ):
         
         Canvas.SetMedia( self, media, start_paused = start_paused )
         
+        # Trigger prefetch when media is set in preview pane
+        if media is not None:
+            self._PrefetchNeighbours()
     
     def SetSplitterHiddenStatus( self, is_hidden ):
         
@@ -1965,10 +2051,27 @@ class CanvasPanelWithHovers( CanvasPanel ):
                 
             #     self._DrawTopMiddle( painter )
                 
+            current_y = 0
             
             if new_options.GetBoolean( 'draw_top_right_hover_in_preview_window_background' ):
                 
                 current_y = self._DrawTopRight( painter )
+                
+            else:
+                
+                # Even if top-right hover is not drawn, we need to calculate where it would end
+                # to position the CBZ indicator correctly
+                if self._current_media.GetMime() == HC.APPLICATION_CBZ:
+                    
+                    # Calculate approximate position where top-right content would end
+                    # This includes ratings, location strings, etc.
+                    current_y = self._CalculateTopRightContentHeight()
+                    
+            
+            # Draw CBZ indicator for CBZ files below the top-right content
+            if self._current_media.GetMime() == HC.APPLICATION_CBZ:
+                
+                self._DrawCBZIndicator( painter, current_y )
                 
             # else:
                 
@@ -2174,7 +2277,97 @@ class CanvasPanelWithHovers( CanvasPanel ):
         
         return current_y
         
-    
+    def _DrawCBZIndicator( self, painter: QG.QPainter, start_y: int = 0 ):
+        
+        # Draw a CBZ indicator below the top-right content
+        my_size = self.size()
+        my_width = my_size.width()
+        
+        cbz_text = 'CBZ'
+        
+        # Set up the font and get text size
+        font = painter.font()
+        font.setBold( True )
+        font.setPointSize( 10 )
+        painter.setFont( font )
+        
+        ( text_size, cbz_text ) = ClientGUIFunctions.GetTextSizeFromPainter( painter, cbz_text )
+        
+        # Position below the top-right content with some padding
+        padding = 8
+        x = my_width - text_size.width() - padding
+        y = start_y + 5  # Add some spacing below the top-right content
+        
+        # Draw background rectangle
+        rect = QC.QRect( x - 4, y - 2, text_size.width() + 8, text_size.height() + 4 )
+        
+        # Set background color (blue)
+        painter.fillRect( rect, QG.QColor( 74, 144, 226 ) )  # #4a90e2
+        
+        # Set text color (white)
+        painter.setPen( QG.QColor( 255, 255, 255 ) )
+        
+        # Draw the text
+        ClientGUIFunctions.DrawText( painter, x, y, cbz_text )
+        
+
+    def _CalculateTopRightContentHeight( self ) -> int:
+        
+        # Calculate approximate height where top-right content would end
+        # This is a simplified calculation to position CBZ indicator correctly
+        
+        try:
+            
+            QFRAME_PADDING = self._top_right_hover.frameWidth()
+            ( VBOX_SPACING, VBOX_MARGIN ) = self._top_right_hover.GetVboxSpacingAndMargin()
+            
+        except:
+            
+            QFRAME_PADDING = 2
+            ( VBOX_SPACING, VBOX_MARGIN ) = ( 2, 2 )
+            
+        
+        current_y = QFRAME_PADDING + VBOX_MARGIN + round( ClientGUIPainterShapes.PAD_PX / 2 )
+        
+        # Add approximate height for ratings (if any)
+        services_manager = CG.client_controller.services_manager
+        like_services = services_manager.GetServices( ( HC.LOCAL_RATING_LIKE, ) )
+        numerical_services = services_manager.GetServices( ( HC.LOCAL_RATING_NUMERICAL, ) )
+        
+        if len( like_services ) > 0:
+            
+            RATING_ICON_SET_SIZE = round( self._new_options.GetFloat( 'preview_window_rating_icon_size_px' ) )
+            current_y += RATING_ICON_SET_SIZE + VBOX_SPACING
+            
+        
+        if len( numerical_services ) > 0:
+            
+            RATING_ICON_SET_SIZE = round( self._new_options.GetFloat( 'preview_window_rating_icon_size_px' ) )
+            current_y += RATING_ICON_SET_SIZE + VBOX_SPACING
+            
+        
+        # Add approximate height for location strings
+        location_strings = self._current_media.GetLocationsManager().GetLocationStrings()
+        
+        if len( location_strings ) > 0:
+            
+            # Approximate text height
+            current_y += 15 * len( location_strings ) + VBOX_SPACING
+            
+        
+        # Add approximate height for URLs
+        urls = self._current_media.GetLocationsManager().GetURLs()
+        
+        if len( urls ) > 0:
+            
+            # Approximate text height for URLs
+            current_y += 15 * min( len( urls ), 3 ) + VBOX_SPACING  # Limit to 3 URLs for estimation
+            
+        
+        current_y += VBOX_MARGIN + QFRAME_PADDING
+        
+        return current_y
+            
     def GetCanvasType( self ):
         
         return self._canvas_type

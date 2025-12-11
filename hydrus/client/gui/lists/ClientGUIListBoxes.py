@@ -810,6 +810,7 @@ class AddEditDeleteListBox( QW.QWidget ):
         
         import_menu_template_items = []
         
+        import_menu_template_items.append( ClientGUIMenuButton.MenuTemplateItemCall( 'from hardcode', 'hardcoded in clientguilistBoxes', self._ImportFromPNGPathHardcoded ) )
         import_menu_template_items.append( ClientGUIMenuButton.MenuTemplateItemCall( 'from clipboard', 'Load a data from text in your clipboard.', self._ImportFromClipboard ) )
         import_menu_template_items.append( ClientGUIMenuButton.MenuTemplateItemCall( 'from pngs', 'Load a data from an encoded png.', self._ImportFromPNG ) )
         
@@ -827,6 +828,39 @@ class AddEditDeleteListBox( QW.QWidget ):
         self._ShowHideButtons()
         
     
+    def _ImportFromPNGPathHardcoded(self):
+        """
+        Import from a hardcoded PNG path instead of using a file dialog.
+        """
+        # Hardcoded path
+        hardcoded_path = r"C:\Users\caprexy\Downloads\hydrus\intake\importurls.png"
+
+        try:
+            payload = ClientSerialisable.LoadFromPNG(hardcoded_path)
+        except Exception as e:
+            HydrusData.PrintException(e)
+            ClientGUIDialogsMessage.ShowCritical(self, 'Problem importing!', f'Could not read PNG:\n{str(e)}')
+            return
+
+        try:
+            obj = HydrusSerialisable.CreateFromNetworkBytes(payload)
+
+            # Use the existing _ImportObject method to import it
+            self._ImportObject(obj)
+
+        except Exception as e:
+            HydrusData.PrintException(e)
+            ClientGUIDialogsMessage.ShowCritical(
+                self,
+                'Problem importing!',
+                'I could not understand what was encoded in the PNG!'
+            )
+            return
+        
+        
+        QP.AddToLayout( self._buttons_hbox, (20,20), CC.FLAGS_EXPAND_PERPENDICULAR )
+        
+        
     def AddSeparator( self ):
         
         QP.AddToLayout( self._buttons_hbox, (20,20), CC.FLAGS_EXPAND_PERPENDICULAR )
