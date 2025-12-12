@@ -116,6 +116,20 @@ class SidebarQuery( ClientGUISidebarCore.Sidebar ):
         
         file_search_context.FixMissingServices( CG.client_controller.services_manager.FilterValidServiceKeys )
         
+        # ----------------------------------------------------------------------
+        # ALWAYS APPEND system:inbox TO NEW SEARCH PAGES
+        # ----------------------------------------------------------------------
+        inbox_pred = ClientSearchPredicate.Predicate(
+            ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_INBOX
+        )
+
+        preds = list(file_search_context.GetPredicates())
+        if inbox_pred not in preds:
+            preds.append(inbox_pred)
+            file_search_context.SetPredicates(tuple(preds))
+            self._page_manager.SetVariable('file_search_context', file_search_context.Duplicate())
+        # ----------------------------------------------------------------------
+        
         self._query_job_status = ClientThreading.JobStatus( cancellable = True )
         
         self._query_job_status.Finish()
@@ -162,6 +176,7 @@ class SidebarQuery( ClientGUISidebarCore.Sidebar ):
         self._system_hash_lock_panel.newSettings.connect( self._UpdateNewLockSettings )
         
         self._UpdateSystemLockedVisibilityAndControls()
+        self.UnlockSearch()
         
     
     def _CancelSearch( self ):
