@@ -824,6 +824,7 @@ class FilenameTaggingOptionsPanel( QW.QWidget ):
             
         
     
+
 class EditLocalImportFilenameTaggingPanel( ClientGUIScrolledPanels.EditPanel ):
     
     def __init__( self, parent, paths ):
@@ -1316,7 +1317,7 @@ class GalleryImportPanel( ClientGUICommon.StaticBox ):
     
     def __init__( self, parent, page_key, name = 'gallery query' ):
         
-        super().__init__( parent, name )
+        super().__init__( parent, name, start_expanded = True, can_expand = True )
         
         self._page_key = page_key
         
@@ -1586,6 +1587,8 @@ class GalleryImportPanel( ClientGUICommon.StaticBox ):
     
 class GUGKeyAndNameSelector( ClientGUICommon.BetterButton ):
     
+    valueChanged = QC.Signal()
+    
     def __init__( self, parent, gug_key_and_name, update_callable = None ):
         
         super().__init__( parent, 'gallery selector', self._Edit )
@@ -1725,6 +1728,8 @@ class GUGKeyAndNameSelector( ClientGUICommon.BetterButton ):
             self._update_callable( gug_key_and_name )
             
         
+        self.valueChanged.emit()
+        
     
     def GetValue( self ):
         
@@ -1742,7 +1747,7 @@ class WatcherReviewPanel( ClientGUICommon.StaticBox ):
     
     def __init__( self, parent, page_key, name = 'watcher' ):
         
-        super().__init__( parent, name )
+        super().__init__( parent, name, start_expanded = True, can_expand = True )
         
         self._page_key = page_key
         self._watcher = None

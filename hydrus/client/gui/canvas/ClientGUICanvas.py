@@ -24,6 +24,7 @@ from hydrus.client.gui import ClientGUICore as CGC
 from hydrus.client.gui import ClientGUIDialogsManage
 from hydrus.client.gui import ClientGUIDialogsMessage
 from hydrus.client.gui import ClientGUIDialogsQuick
+from hydrus.client.gui import ClientGUIExceptionHandling
 from hydrus.client.gui import ClientGUIFunctions
 from hydrus.client.gui import ClientGUIMenus
 from hydrus.client.gui import ClientGUIRatings
@@ -31,6 +32,7 @@ from hydrus.client.gui import ClientGUIShortcuts
 from hydrus.client.gui import ClientGUITopLevelWindowsPanels
 from hydrus.client.gui.canvas import ClientGUICanvasHoverFrames
 from hydrus.client.gui.canvas import ClientGUICanvasMedia
+from hydrus.client.gui.canvas import ClientGUICanvasMenus
 from hydrus.client.gui.duplicates import ClientGUIDuplicateActions
 from hydrus.client.gui.media import ClientGUIMediaSimpleActions
 from hydrus.client.gui.media import ClientGUIMediaModalActions
@@ -349,7 +351,7 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
         
         self._service_keys_to_services = {}
         
-        self._current_media: typing.Optional[ ClientMedia.MediaSingleton ] = None
+        self._current_media: ClientMedia.MediaSingleton | None = None
         
         catch_mouse = True
         
@@ -395,7 +397,7 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
             
         
     
-    def _Delete( self, media = None, default_reason = None, file_service_key = None, just_get_content_update_packages = False ) -> typing.Union[ bool, collections.abc.Collection[ ClientContentUpdates.ContentUpdatePackage ] ]:
+    def _Delete( self, media = None, default_reason = None, file_service_key = None, just_get_content_update_packages = False ) -> bool | collections.abc.Collection[ ClientContentUpdates.ContentUpdatePackage ]:
         
         if media is None:
             
@@ -857,6 +859,11 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
         return self._my_shortcuts_handler.GetCustomShortcutNames()
         
     
+    def GetCanvasKey( self ):
+        
+        return self._canvas_key
+        
+    
     def GetColour( self, colour_type ):
         
         if self._new_options.GetBoolean( 'override_stylesheet_colours' ):
@@ -936,9 +943,16 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
     
     def paintEvent( self, event ):
         
-        painter = QG.QPainter( self )
-        
-        self._DrawBackgroundBitmap( painter )
+        try:
+            
+            painter = QG.QPainter( self )
+            
+            self._DrawBackgroundBitmap( painter )
+            
+        except Exception as e:
+            
+            ClientGUIExceptionHandling.HandlePaintEventException( self, e )
+            
         
     
     def PauseMedia( self ):
@@ -1552,7 +1566,7 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
         self._location_context = location_context
         
     
-    def SetMedia( self, media: typing.Optional[ ClientMedia.MediaSingleton ], start_paused = None ):
+    def SetMedia( self, media: ClientMedia.MediaSingleton | None, start_paused = None ):
         
         if media is not None and not self.isVisible():
             
@@ -1641,6 +1655,16 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
             
             self.update()
             
+        
+    
+    def SlideshowIsRunning( self ) -> bool:
+        
+        return False
+        
+    
+    def SupportsSlideshow( self ) -> bool:
+        
+        return False
         
     
     def ZoomChanged( self ):
@@ -3453,16 +3477,6 @@ class CanvasMediaList( CanvasWithHovers ):
         self.SetMedia( self._media_list.GetPrevious( self._current_media ) )
         
     
-    def _ShowRandom( self ):
-        
-        self.SetMedia( self._media_list.GetRandom( self._current_media ) )
-        
-    
-    def _UndoRandom( self ):
-        
-        self.SetMedia( self._media_list.UndoRandom( self._current_media ) )
-        
-    
     def _StartSlideshow( self, interval: float ):
         
         pass
@@ -3860,44 +3874,37 @@ class CanvasMediaListFilterArchiveDelete( CanvasMediaList ):
             
             if len( deleted ) > 0:
                 
-                location_contexts_to_present_options_for = []
-                
-                possible_location_context_at_top = self._location_context.Duplicate()
-                
-                possible_location_context_at_top.LimitToServiceTypes( CG.client_controller.services_manager.GetServiceType, ( HC.COMBINED_LOCAL_FILE_DOMAINS, HC.LOCAL_FILE_DOMAIN ) )
-                
-                if len( possible_location_context_at_top.current_service_keys ) > 0:
-                    
-                    location_contexts_to_present_options_for.append( possible_location_context_at_top )
-                    
-                
-                current_local_service_keys = HydrusLists.MassUnion( [ m.GetLocationsManager().GetCurrent() for m in deleted ] )
-                
-                local_file_domain_service_keys = [ service_key for service_key in current_local_service_keys if CG.client_controller.services_manager.GetServiceType( service_key ) == HC.LOCAL_FILE_DOMAIN ]
-                
-                location_contexts_to_present_options_for.extend( [ ClientLocation.LocationContext.STATICCreateSimple( service_key ) for service_key in local_file_domain_service_keys ] )
-                
-                combined_local_file_domains_location_context = ClientLocation.LocationContext.STATICCreateSimple( CC.COMBINED_LOCAL_FILE_DOMAINS_SERVICE_KEY )
-                
-                if len( local_file_domain_service_keys ) > 1:
-                    
-                    location_contexts_to_present_options_for.append( combined_local_file_domains_location_context )
-                    
-                elif len( local_file_domain_service_keys ) == 1:
-                    
-                    if combined_local_file_domains_location_context in location_contexts_to_present_options_for:
-                        
-                        location_contexts_to_present_options_for.remove( combined_local_file_domains_location_context )
-                        
-                    
-                
-                location_contexts_to_present_options_for = HydrusLists.DedupeList( location_contexts_to_present_options_for )
-                
-                only_allow_all_media_files = len( location_contexts_to_present_options_for ) > 1 and CG.client_controller.new_options.GetBoolean( 'only_show_delete_from_all_local_domains_when_filtering' ) and True in ( location_context.IsAllMediaFiles() for location_context in location_contexts_to_present_options_for )
-                
-                if only_allow_all_media_files:
+                if CG.client_controller.new_options.GetBoolean( 'only_show_delete_from_all_local_domains_when_filtering' ):
                     
                     location_contexts_to_present_options_for = [ ClientLocation.LocationContext.STATICCreateSimple( CC.COMBINED_LOCAL_FILE_DOMAINS_SERVICE_KEY ) ]
+                    
+                else:
+                    
+                    location_contexts_to_present_options_for = []
+                    
+                    possible_location_context_at_top = self._location_context.Duplicate()
+                    
+                    possible_location_context_at_top.LimitToServiceTypes( CG.client_controller.services_manager.GetServiceType, ( HC.COMBINED_LOCAL_FILE_DOMAINS, HC.LOCAL_FILE_DOMAIN ) )
+                    
+                    if len( possible_location_context_at_top.current_service_keys ) > 0:
+                        
+                        location_contexts_to_present_options_for.append( possible_location_context_at_top )
+                        
+                    
+                    current_local_service_keys = HydrusLists.MassUnion( [ m.GetLocationsManager().GetCurrent() for m in deleted ] )
+                    
+                    local_file_domain_service_keys = [ service_key for service_key in current_local_service_keys if CG.client_controller.services_manager.GetServiceType( service_key ) == HC.LOCAL_FILE_DOMAIN ]
+                    
+                    location_contexts_to_present_options_for.extend( [ ClientLocation.LocationContext.STATICCreateSimple( service_key ) for service_key in local_file_domain_service_keys ] )
+                    
+                    combined_local_file_domains_location_context = ClientLocation.LocationContext.STATICCreateSimple( CC.COMBINED_LOCAL_FILE_DOMAINS_SERVICE_KEY )
+                    
+                    if len( local_file_domain_service_keys ) > 1:
+                        
+                        location_contexts_to_present_options_for.insert( 0, combined_local_file_domains_location_context )
+                        
+                    
+                    location_contexts_to_present_options_for = HydrusLists.DedupeList( location_contexts_to_present_options_for )
                     
                 
                 for location_context in location_contexts_to_present_options_for:
@@ -3908,16 +3915,25 @@ class CanvasMediaListFilterArchiveDelete( CanvasMediaList ):
                     
                     if num_deletable > 0:
                         
+                        location_label = location_context.ToString( CG.client_controller.services_manager.GetName )
+                        
                         if location_context == ClientLocation.LocationContext.STATICCreateSimple( CC.COMBINED_LOCAL_FILE_DOMAINS_SERVICE_KEY ):
                             
-                            location_label = 'combined local file domains'
+                            if num_deletable == 1:
+                                
+                                num_label = '1'
+                                
+                            else:
+                                
+                                num_label = f'all {HydrusNumbers.ToHumanInt( num_deletable )}'
+                                
+                            
+                            delete_label = f'delete {num_label} from {location_label}, sending directly to trash'
                             
                         else:
                             
-                            location_label = location_context.ToString( CG.client_controller.services_manager.GetName )
+                            delete_label = f'delete {HydrusNumbers.ToHumanInt( num_deletable )} from {location_label}'
                             
-                        
-                        delete_label = 'delete {} from {}'.format( HydrusNumbers.ToHumanInt( num_deletable ), location_label )
                         
                         deletion_options.append( ( location_context, delete_label ) )
                         
@@ -4040,6 +4056,16 @@ class CanvasMediaListNavigable( CanvasMediaList ):
             
             self.SetMedia( next_media )
             
+        
+    
+    def _ShowRandom( self ):
+        
+        self.SetMedia( self._media_list.GetRandom( self._current_media ) )
+        
+    
+    def _UndoRandom( self ):
+        
+        self.SetMedia( self._media_list.UndoRandom( self._current_media ) )
         
     
     def Archive( self, canvas_key ):
@@ -4180,6 +4206,7 @@ class CanvasMediaListNavigable( CanvasMediaList ):
             
         
     
+
 class CanvasMediaListBrowser( CanvasMediaListNavigable ):
     
     def __init__( self, parent, page_key, location_context: ClientLocation.LocationContext, media_results, first_hash ):
@@ -4352,7 +4379,15 @@ class CanvasMediaListBrowser( CanvasMediaListNavigable ):
                 return
                 
             
-            self._ShowNext()
+            if CG.client_controller.new_options.GetBoolean( 'slideshows_progress_randomly' ):
+                
+                self._ShowRandom()
+                
+            else:
+                
+                self._ShowNext()
+                
+                
             
             self._RegisterNextSlideshowPresentation()
             
@@ -4413,12 +4448,14 @@ class CanvasMediaListBrowser( CanvasMediaListNavigable ):
             
             period = float( period_str )
             
-            self._StartSlideshow( period )
-            
         except:
             
             ClientGUIDialogsMessage.ShowWarning( self, 'Could not parse that slideshow period!' )
             
+            return
+            
+        
+        self._StartSlideshow( period )
         
     
     def _StopSlideshow( self ):
@@ -4456,6 +4493,21 @@ class CanvasMediaListBrowser( CanvasMediaListNavigable ):
             if action == CAC.SIMPLE_PAUSE_PLAY_SLIDESHOW:
                 
                 self._PausePlaySlideshow()
+                
+            elif action == CAC.SIMPLE_START_SLIDESHOW:
+                
+                data = command.GetSimpleData()
+                
+                if data is None:
+                    
+                    self._StartSlideshowCustomPeriod()
+                    
+                else:
+                    
+                    period_seconds = data
+                    
+                    self._StartSlideshow( period_seconds )
+                    
                 
             elif action == CAC.SIMPLE_SHOW_MENU:
                 
@@ -4557,26 +4609,7 @@ class CanvasMediaListBrowser( CanvasMediaListNavigable ):
                 ClientGUIMenus.AppendMenuItem( menu, 'go fullscreen', 'Make this media viewer a fullscreen window without borders.', self.ProcessApplicationCommand, CAC.ApplicationCommand.STATICCreateSimpleCommand( CAC.SIMPLE_SWITCH_BETWEEN_FULLSCREEN_BORDERLESS_AND_REGULAR_FRAMED_WINDOW ) )
                 
             
-            slideshow = ClientGUIMenus.GenerateMenu( menu )
-            
-            slideshow_durations = CG.client_controller.new_options.GetSlideshowDurations()
-            
-            for slideshow_duration in slideshow_durations:
-                
-                pretty_duration = HydrusTime.TimeDeltaToPrettyTimeDelta( slideshow_duration )
-                
-                ClientGUIMenus.AppendMenuItem( slideshow, pretty_duration, f'Start a slideshow that changes media every {pretty_duration}.', self._StartSlideshow, slideshow_duration )
-                
-            
-            ClientGUIMenus.AppendMenuItem( slideshow, 'very fast', 'Start a very fast slideshow.', self._StartSlideshow, 0.08 )
-            ClientGUIMenus.AppendMenuItem( slideshow, 'custom interval', 'Start a slideshow with a custom interval.', self._StartSlideshowCustomPeriod )
-            
-            ClientGUIMenus.AppendMenu( menu, slideshow, 'start slideshow' )
-            
-            if self._slideshow_is_running:
-                
-                ClientGUIMenus.AppendMenuItem( menu, 'stop slideshow', 'Stop the current slideshow.', self._PausePlaySlideshow )
-                
+            ClientGUICanvasMenus.AppendSlideshowMenu( self, menu, self._slideshow_is_running )
             
             ClientGUIMenus.AppendSeparator( menu )
             
@@ -4680,6 +4713,16 @@ class CanvasMediaListBrowser( CanvasMediaListNavigable ):
             
             CGC.core().PopupMenu( self, menu )
             
+        
+    
+    def SlideshowIsRunning( self ) -> bool:
+        
+        return self._slideshow_is_running
+        
+    
+    def SupportsSlideshow( self ) -> bool:
+        
+        return True
         
     
     def TIMERUIUpdate( self ):

@@ -2,13 +2,11 @@ import collections
 import collections.abc
 import decimal
 import fractions
-import itertools
 import os
 import struct
 import sys
 import time
 import traceback
-import typing
 import yaml
 
 from hydrus.core import HydrusConstants as HC
@@ -38,7 +36,7 @@ def BuildKeyToSetDict( pairs ):
     return d
     
 
-def BytesToNoneOrHex( b: typing.Optional[ bytes ] ):
+def BytesToNoneOrHex( b: bytes | None ):
     
     if b is None:
         
@@ -50,7 +48,7 @@ def BytesToNoneOrHex( b: typing.Optional[ bytes ] ):
         
     
 
-def HexToNoneOrBytes( h: typing.Optional[ str ] ):
+def HexToNoneOrBytes( h: str | None ):
     
     if h is None:
         
@@ -257,18 +255,6 @@ def GetTypeName( obj_type ):
     else:
         
         return repr( obj_type )
-        
-    
-
-def IterateHexPrefixes():
-    
-    hex_chars = '0123456789abcdef'
-    
-    for ( one, two ) in itertools.product( hex_chars, hex_chars ):
-        
-        prefix = one + two
-        
-        yield prefix
         
     
 

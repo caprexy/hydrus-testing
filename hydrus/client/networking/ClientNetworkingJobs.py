@@ -1,6 +1,5 @@
 import datetime
 import os
-import typing
 
 import requests
 import tempfile
@@ -85,6 +84,10 @@ def ConvertStatusCodeAndDataIntoExceptionInfo( status_code, data, is_hydrus_serv
     elif status_code == 429:
         
         eclass = HydrusExceptions.BandwidthException
+        
+    elif status_code == 451:
+        
+        eclass = HydrusExceptions.CensorshipException
         
     elif status_code in ( 509, 529 ):
         
@@ -197,7 +200,7 @@ class NetworkJob( object ):
         
         self._stream_io = tempfile.SpooledTemporaryFile( max_size = 10 * 1048576, mode = 'w+b' )
         
-        self._error_exception: typing.Optional[ Exception ] = None
+        self._error_exception: Exception | None = None
         self._error_text = None
         
         self._is_done_event = threading.Event()
@@ -1191,7 +1194,7 @@ class NetworkJob( object ):
             
         
     
-    def GetLastModifiedTime( self ) -> typing.Optional[ int ]:
+    def GetLastModifiedTime( self ) -> int | None:
         
         with self._lock:
             

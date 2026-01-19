@@ -1766,6 +1766,17 @@ class FileSeed( HydrusSerialisable.SerialisableBase ):
             
             time.sleep( 2 )
             
+        except HydrusExceptions.CensorshipException:
+            
+            status = CC.STATUS_VETOED
+            note = 'site reports http status code 451: Unavailable For Legal Reasons'
+            
+            self.SetStatus( status, note = note )
+            
+            status_hook( '451 censorship!' )
+            
+            time.sleep( 2 )
+            
         except HydrusExceptions.UnsupportedFileException as e:
             
             status = CC.STATUS_ERROR
@@ -1792,7 +1803,7 @@ class FileSeed( HydrusSerialisable.SerialisableBase ):
         return did_substantial_work
         
     
-    def WriteContentUpdates( self, file_import_options: typing.Optional[ FileImportOptions.FileImportOptions ] = None, tag_import_options: typing.Optional[ TagImportOptions.TagImportOptions ] = None, note_import_options: typing.Optional[ NoteImportOptions.NoteImportOptions ] = None ):
+    def WriteContentUpdates( self, file_import_options: FileImportOptions.FileImportOptions | None = None, tag_import_options: TagImportOptions.TagImportOptions | None = None, note_import_options: NoteImportOptions.NoteImportOptions | None = None ):
         
         did_work = False
         
@@ -1972,7 +1983,7 @@ class FileSeedCacheStatus( HydrusSerialisable.SerialisableBase ):
         self._statuses_to_counts.update( dict( serialisable_statuses_to_counts ) )
         
     
-    def GetFileSeedCount( self, status: typing.Optional[ int ] = None ) -> int:
+    def GetFileSeedCount( self, status: int | None = None ) -> int:
         
         if status is None:
             
@@ -2397,7 +2408,7 @@ class FileSeedCache( HydrusSerialisable.SerialisableBase ):
         return latest_timestamp
         
     
-    def _GetMyFileSeed( self, file_seed: FileSeed ) -> typing.Optional[ FileSeed ]:
+    def _GetMyFileSeed( self, file_seed: FileSeed ) -> FileSeed | None:
         
         search_file_seeds = file_seed.GetSearchFileSeeds()
         
@@ -2412,7 +2423,7 @@ class FileSeedCache( HydrusSerialisable.SerialisableBase ):
         return None
         
     
-    def _GetNextFileSeed( self, status: int ) -> typing.Optional[ FileSeed ]:
+    def _GetNextFileSeed( self, status: int ) -> FileSeed | None:
         
         statuses_to_file_seeds = self._GetStatusesToFileSeeds()
         file_seeds_to_indices = self._GetFileSeedsToIndices()
@@ -3185,7 +3196,7 @@ class FileSeedCache( HydrusSerialisable.SerialisableBase ):
             
         
     
-    def GetFirstFileSeed( self ) -> typing.Optional[ FileSeed ]:
+    def GetFirstFileSeed( self ) -> FileSeed | None:
         
         with self._lock:
             
@@ -3225,7 +3236,7 @@ class FileSeedCache( HydrusSerialisable.SerialisableBase ):
         return latest_timestamp
         
     
-    def GetNextFileSeed( self, status: int ) -> typing.Optional[ FileSeed ]:
+    def GetNextFileSeed( self, status: int ) -> FileSeed | None:
         
         with self._lock:
             

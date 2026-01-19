@@ -266,6 +266,7 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
             'fade_sibling_connector' : True,
             'use_custom_sibling_connector_colour' : False,
             'hide_uninteresting_modified_time' : True,
+            'hover_windows_need_window_focus_to_pop_in' : True,
             'draw_tags_hover_in_media_viewer_background' : True,
             'draw_top_hover_in_media_viewer_background' : True,
             'draw_top_right_hover_in_media_viewer_background' : True,
@@ -275,6 +276,7 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
             'draw_bottom_right_index_in_media_viewer_background' : True,
             'disable_tags_hover_in_media_viewer': False,
             'disable_top_right_hover_in_media_viewer': False,
+            'disable_notes_hover_in_media_viewer': False,
             'media_viewer_window_always_on_top': False,
             'media_viewer_lock_current_zoom_type': False,
             'media_viewer_lock_current_zoom': False,
@@ -335,6 +337,11 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
             'manage_tags_show_deleted_mappings' : False,
             'mpv_destruction_test' : False,
             'hover_window_duplicates_always_on_top' : True,
+            'animated_scanbar_pop_in_requires_focus' : True,
+            'slideshows_progress_randomly' : False,
+            'archive_delete_commit_panel_delays_multiple_delete_choices' : True,
+            'always_start_media_viewers_always_on_top' : False,
+            'always_start_media_viewers_frameless' : False,
         }
         
         #
@@ -552,6 +559,7 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
             'page_nav_history_max_entries' : 100,
             'tag_list_tag_display_type_sidebar' : ClientTags.TAG_DISPLAY_SELECTION_LIST,
             'tag_list_tag_display_type_media_viewer_hover' : ClientTags.TAG_DISPLAY_SINGLE_MEDIA,
+            'command_palette_num_chars_for_results_threshold' : 1,
         }
         
         self._dictionary[ 'floats' ] = {

@@ -491,6 +491,11 @@ class BetterCheckBoxList( QW.QListWidget ):
         
         row_height = self.sizeHintForRow( 0 )
         
+        if row_height == -1:
+            
+            ( width_gumpf, row_height ) = ClientGUIFunctions.ConvertTextToPixels( self, ( 20, 1 ) )
+            
+        
         # ( width, height ) = ClientGUIFunctions.ConvertTextToPixels( self, ( 10, num_chars ) )
         
         height = ( row_height * num_chars ) + ( self.frameWidth() * 2 )
@@ -1641,7 +1646,7 @@ class NoneableTextCtrl( QW.QWidget ):
 
     valueChanged = QC.Signal()
     
-    def __init__( self, parent, default_text, message = '', placeholder_text = '', none_phrase = 'none', min_chars_width: typing.Optional[ int ] = None ):
+    def __init__( self, parent, default_text, message = '', placeholder_text = '', none_phrase = 'none', min_chars_width: int | None = None ):
         
         super().__init__( parent )
         

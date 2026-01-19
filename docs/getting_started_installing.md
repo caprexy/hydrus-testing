@@ -37,14 +37,16 @@ I try to release a new version every Wednesday by 8pm EST and write an accompany
 
 === "Linux"
     
-    ??? warning "Wayland (and MPV)"
-        Unfortunately, hydrus has several bad bugs in Wayland. The mpv window will often not embed properly into the media viewer, menus and windows may position on the wrong screen, and the taskbar icon may not work at all. [Running from source](running_from_source.md) may improve the situation, but some of these issues seem to be intractable for now.
+    !!! warning "Wayland (and MPV)"
+        Unfortunately, hydrus has several bad bugs in Wayland. The mpv window will often not embed properly into the media viewer, menus and windows may position on the wrong screen, and the taskbar icon may not work at all. Newer versions are less buggy, and [running from source](running_from_source.md) may improve the situation, but some of these issues, particularly mpv embedding, seem to be intractable.
         
         User testing suggests that the best solution for now is just to launch the program in X11, and I now encourage this for all Wayland users. Launching with the environment variable `QT_QPA_PLATFORM=xcb` (e.g. by putting `export QT_QPA_PLATFORM=xcb` in a boot script that launches `hydrus_client`) should do it. The 'xcb' should force X11.
         
         It does not work for everyone, though. If it fails, another user says setting `WAYLAND_DISPLAY=` (as in setting it to nothing) or unsetting it entirely with `unset WAYLAND_DISPLAY`, which forces hydrus (and its embedded mpv windows) to use Xwayland, is another solution. You might need to do `sudo apt install xwayland` first.
         
-        I expect to revisit this question in future versions of Qt and Wayland--we'll see if the situation stabilises.
+        You should be able to see which window manager hydrus thinks it is running under in `help->about`, on the "Qt" row.
+        
+        I expect to revisit this question in future versions of Qt and Wayland, and I plan to try a different mpv embedding technique that I know Wayland should support--we'll see if the situation stabilises.
     
     ??? warning "MangoHUD and MPV"
         A user notes that MangoHUD may also interfere with mpv, causing crashes.
@@ -68,6 +70,8 @@ I try to release a new version every Wednesday by 8pm EST and write an accompany
         * `sudo apt install libxcb-cursor-dev`
         
         Or check your OS's package manager.
+        
+        One user reports that Fedora might need `libxkbcommon` too.
         
     
     *   Get the .tag.gz. Extract it somewhere useful and create shortcuts to 'hydrus_client' and 'hydrus_server' as you like. The build is made on Ubuntu, so if you run something else, compatibility is hit and miss.
@@ -201,7 +205,7 @@ As a result, if you get a failure on trying to do a big update, try cutting the 
 
 If you narrow the gap down to just one version and still get an error, please let me know. If the problem is ever quick to appear and ugly/serious-looking, and perhaps talking about a "bootloader" or "dll" issue, then try doing a clean install as above. I am very interested in these sorts of problems and will be happy to help figure out a fix with you (and everyone else who might be affected).
 
-_All that said, and while updating is complex and every client is different, various user reports over the years suggest this route works and is efficient: 204 > 238 > 246 > 291 > 328 > 335 (clean install) > 376 > 421 > 466 (clean install) > 474 > 480 > 521 (maybe clean install) > 527 (special clean install) > 535 > 558 > 571 (clean install) > 603_ 
+_All that said, and while updating is complex and every client is different, various user reports over the years suggest this route works and is efficient: 204 > 238 > 246 > 291 > 328 > 335 (clean install) > 376 > 421 > 466 (clean install) > 474 > 480 > 521 (maybe clean install) > 527 (special clean install) > 535 > 558 > 571 (clean install) > 603 > 652_ 
 
 ??? note "334->335"
     We moved from python 2 to python 3.
