@@ -386,13 +386,18 @@ class HydrusListItemModel( QC.QAbstractItemModel ):
                 
                 # TODO: when we do hidden/rearranged columns, there will be a question on how to arrange the fallback here. I guess a frozen tuple according to the current order, if that isn't too CPU crazy
                 # or just the first column_logical_position or two!
-                return ( 0, sort_tuple[ column_logical_position ], sort_tuple )
+                key_for_comparison = ( 0, sort_tuple[ column_logical_position ], sort_tuple )
+                
+                print( f'---\nMASTER SORT KEY DEBUG:\n  - Sorting Column Index: {column_logical_position}\n  - Data Object: {data}\n  - Full Cached Sort Tuple: {sort_tuple}\n  - Final Key for Comparison: {key_for_comparison}\n---' )
+                
+                return key_for_comparison
                 
             
         
         try:
             
             datas_sorted = sorted( self._data_to_indices.keys(), key = master_sort_key, reverse = not asc )
+            print("aaaa")
             
         except Exception as e:
             

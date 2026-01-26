@@ -2,6 +2,7 @@ import collections
 import collections.abc
 import os
 import queue
+import re
 import threading
 
 from qtpy import QtCore as QC
@@ -53,6 +54,9 @@ result_str_lookup = {
     RESULT_SIDECAR : 'sidecar',
     RESULT_DIRECTORY : 'directory (you should not see this)'
 }
+
+def natural_sort_key(s):
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
 
 class LocalFileParse( object ):
     
@@ -294,7 +298,7 @@ class ReviewLocalFileImports( ClientGUIScrolledPanels.ReviewPanel ):
         
         sort_tuple = (
             local_file_parse.index,
-            local_file_parse.path,
+            natural_sort_key(local_file_parse.path),
             ( local_file_parse.result != RESULT_GOOD, local_file_parse.GetPrettyMime() ),
             local_file_parse.size
         )
@@ -328,7 +332,7 @@ class ReviewLocalFileImports( ClientGUIScrolledPanels.ReviewPanel ):
     
     def _GetGoodPaths( self ):
         
-        local_file_parses: list[ LocalFileParse ] = sorted( self._paths_list.GetData(), key = lambda lfp: lfp.index )
+        local_file_parses: list[ LocalFileParse ] = self._paths_list.GetData()
         
         good_paths = [ local_file_parse.path for local_file_parse in local_file_parses if local_file_parse.result == RESULT_GOOD ]
         
