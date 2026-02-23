@@ -477,6 +477,7 @@ class ClientDBMasterTexts( ClientDBModule.ClientDBModule ):
         return text_id
         
     
+
 class ClientDBMasterTags( ClientDBModule.ClientDBModule ):
     
     def __init__( self, cursor: sqlite3.Cursor ):
@@ -741,7 +742,7 @@ class ClientDBMasterTags( ClientDBModule.ClientDBModule ):
             
             tag = HydrusTags.CleanTag( tag )
             
-        except:
+        except Exception as e:
             
             return False
             

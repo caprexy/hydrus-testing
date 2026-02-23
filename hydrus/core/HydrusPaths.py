@@ -59,6 +59,7 @@ def AppendPathUntilNoConflicts( path ):
     
     return good_path_absent_ext + ext
     
+
 def ConvertAbsPathToPortablePath( abs_path, base_dir_override = None ):
     
     try:
@@ -79,7 +80,7 @@ def ConvertAbsPathToPortablePath( abs_path, base_dir_override = None ):
             portable_path = abs_path
             
         
-    except:
+    except Exception as e:
         
         portable_path = abs_path
         
@@ -90,6 +91,11 @@ def ConvertAbsPathToPortablePath( abs_path, base_dir_override = None ):
         
     
     return portable_path
+    
+
+def ConvertAbsPathToRealPath( abs_path ):
+    
+    return os.path.realpath( abs_path, strict = False )
     
 
 def ConvertPortablePathToAbsPath( portable_path, base_dir_override = None ):
@@ -114,7 +120,7 @@ def ConvertPortablePathToAbsPath( portable_path, base_dir_override = None ):
         abs_path = os.path.normpath( os.path.join( base_dir, portable_path ) )
         
     
-    # is this sensible, what am I trying to do here? recover from a legacy platform migration maybe, from perhaps when I stored backslashes in portable paths?
+    # is this sensible, what am I trying to do here? recover from a legacy platform migration maybe?
     if not HC.PLATFORM_WINDOWS and not os.path.exists( abs_path ):
         
         abs_path = abs_path.replace( '\\', '/' )
@@ -268,7 +274,7 @@ def DirectoryIsWriteable( path ):
         
         os.unlink( test_path )
         
-    except:
+    except Exception as e:
         
         return False
         
@@ -598,7 +604,7 @@ def FigureOutDBDir( arg_db_dir: str ):
         
         db_dir = arg_db_dir
         
-        db_dir = ConvertPortablePathToAbsPath( db_dir, HC.BASE_DIR )
+        db_dir = ConvertPortablePathToAbsPath( db_dir, base_dir_override = HC.BASE_DIR )
         
     
     if not DirectoryIsWriteable( db_dir ):
@@ -670,13 +676,23 @@ def FilterOlderModifiedFiles( paths: collections.abc.Collection[ str ], grace_pe
                 good_paths.append( path )
                 
             
-        except:
+        except Exception as e:
             
             continue
             
         
     
     return good_paths
+    
+
+def GetAllSubDirsNonRecursive( path ):
+    
+    with os.scandir( path ) as scan:
+        
+        subdir_paths = { entry.path for entry in scan if entry.is_dir() }
+        
+    
+    return subdir_paths
     
 
 def GetDefaultLaunchPath():
@@ -792,7 +808,7 @@ def GetFreeSpace( path ) -> int | None:
         
         return disk_usage.free
         
-    except:
+    except Exception as e:
         
         return None
         
@@ -993,7 +1009,7 @@ def CopyTimes( source, dest ):
         
         return True
         
-    except:
+    except Exception as e:
         
         return False
         
@@ -1497,7 +1513,7 @@ def PathIsFree( path ):
             return True
             
         
-    except:
+    except Exception as e:
         
         HydrusData.Print( 'Could not open the file: ' + path )
         
@@ -1654,7 +1670,7 @@ try:
     PROCESS_UMASK = os.umask( 0o022 )
     os.umask( PROCESS_UMASK )
     
-except:
+except Exception as e:
     
     PROCESS_UMASK = 0o022
     

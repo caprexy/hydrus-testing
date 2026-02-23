@@ -53,7 +53,7 @@ try:
     import cbor2
     import base64
     CBOR_AVAILABLE = True
-except:
+except Exception as e:
     pass
 
 def wash_example_json_response( obj ):
@@ -122,20 +122,73 @@ def GetExampleServicesDict():
             'name' : 'example local rating like service',
             'type' : 7,
             'type_pretty' : 'local like/dislike rating service',
-            'star_shape' : 'svg'
+            'star_shape' : 'svg',
+            'show_in_thumbnail' : False,
+            'show_in_thumbnail_even_when_null' : False,
+            'colours': {
+                'dislike': {
+                    'brush': '#C85078',
+                    'pen': '#000000'
+                },
+                'like': {
+                    'brush': '#50C878',
+                    'pen': '#000000'
+                },
+                'mixed': {
+                    'brush': '#5F5F5F',
+                    'pen': '#000000'
+                },
+                'null': {
+                    'brush': '#BFBFBF',
+                    'pen': '#000000'
+                }
+            },
         },
         TG.test_controller.example_numerical_rating_service_key.hex() : {
             'name' : 'example local rating numerical service',
             'type' : 6,
             'type_pretty' : 'local numerical rating service',
+            'allows_zero' : True,
             'min_stars' : 0,
             'max_stars' : 5,
-            'star_shape' : 'circle'
+            'star_shape' : 'circle',
+            'show_in_thumbnail' : False,
+            'show_in_thumbnail_even_when_null' : False,
+            'colours': {
+                'dislike': {
+                    'brush': '#FFFFFF',
+                    'pen': '#000000'
+                },
+                'like': {
+                    'brush': '#50C878',
+                    'pen': '#000000'
+                },
+                'mixed': {
+                    'brush': '#5F5F5F',
+                    'pen': '#000000'
+                },
+                'null': {
+                    'brush': '#BFBFBF',
+                    'pen': '#000000'
+                }
+            },
         },
         TG.test_controller.example_incdec_rating_service_key.hex() : {
             'name' : 'example local rating inc/dec service',
             'type' : 22,
-            'type_pretty' : 'local inc/dec rating service'
+            'type_pretty' : 'local inc/dec rating service',
+            'show_in_thumbnail' : False,
+            'show_in_thumbnail_even_when_null' : False,
+            'colours': {
+                'like': {
+                    'brush': '#50C878',
+                    'pen': '#000000'
+                },
+                'mixed': {
+                    'brush': '#5F5F5F',
+                    'pen': '#000000'
+                },
+            },
         },
         '7472617368' : {
             'name' : 'trash',
@@ -964,13 +1017,25 @@ class TestClientAPI( unittest.TestCase ):
         
         self.assertEqual( response.getheader( 'content-type' ), 'image/svg+xml' )
         
-        svg_path = HydrusStaticDir.GetSVGPath( 'star' )
+        svg_path = HydrusStaticDir.GetRatingSVGPath( 'star' )
         
         svg_file = open( svg_path, 'rb' )
         
         svg_content = svg_file.read()
         
         self.assertEqual( data, svg_content )
+        
+        #
+        
+        path = f'/get_service_rating_svg?service_key={TG.test_controller.example_numerical_rating_service_key.hex()}'
+        
+        connection.request( 'GET', path, headers = headers )
+        
+        response = connection.getresponse()
+        
+        data = response.read()
+        
+        self.assertEqual( response.status, 404 )
         
     
     def _test_add_files_add_file( self, connection, set_up_permissions ):
@@ -3675,6 +3740,90 @@ class TestClientAPI( unittest.TestCase ):
         d = json.loads( text )
         
         expected_result = {
+            'autocomplete_text' : {
+                'search_text' : 'gre',
+                'inclusive' : True,
+            },
+            'tags' : [
+                {
+                    'value' : 'green',
+                    'count' : 2
+                }
+            ]
+        }
+        
+        wash_example_json_response( expected_result )
+        
+        self.assertEqual( expected_result, d )
+        
+        # doing an exclusive search
+        
+        predicates = [
+            ClientSearchPredicate.Predicate( ClientSearchPredicate.PREDICATE_TYPE_TAG, 'green', count = ClientSearchPredicate.PredicateCount( 2, 0, None, None ) ),
+            ClientSearchPredicate.Predicate( ClientSearchPredicate.PREDICATE_TYPE_TAG, 'green car', count = ClientSearchPredicate.PredicateCount( 5, 0, None, None ) )
+        ]
+        
+        TG.test_controller.SetRead( 'autocomplete_predicates', predicates )
+        
+        path = '/add_tags/search_tags?search={}'.format( '-gre' )
+        
+        connection.request( 'GET', path, headers = headers )
+        
+        response = connection.getresponse()
+        
+        data = response.read()
+        
+        text = str( data, 'utf-8' )
+        
+        self.assertEqual( response.status, 200 )
+        
+        d = json.loads( text )
+        
+        expected_result = {
+            'autocomplete_text' : {
+                'search_text' : 'gre',
+                'inclusive' : False,
+            },
+            'tags' : [
+                {
+                    'value' : 'green',
+                    'count' : 2
+                }
+            ]
+        }
+        
+        wash_example_json_response( expected_result )
+        
+        self.assertEqual( expected_result, d )
+        
+        # doing an exclusive search
+        
+        predicates = [
+            ClientSearchPredicate.Predicate( ClientSearchPredicate.PREDICATE_TYPE_TAG, 'green', count = ClientSearchPredicate.PredicateCount( 2, 0, None, None ) ),
+            ClientSearchPredicate.Predicate( ClientSearchPredicate.PREDICATE_TYPE_TAG, 'green car', count = ClientSearchPredicate.PredicateCount( 5, 0, None, None ) )
+        ]
+        
+        TG.test_controller.SetRead( 'autocomplete_predicates', predicates )
+        
+        path = '/add_tags/search_tags?search={}'.format( 'gr*n' )
+        
+        connection.request( 'GET', path, headers = headers )
+        
+        response = connection.getresponse()
+        
+        data = response.read()
+        
+        text = str( data, 'utf-8' )
+        
+        self.assertEqual( response.status, 200 )
+        
+        d = json.loads( text )
+        
+        expected_result = {
+            'autocomplete_text' : {
+                'search_text' : 'gr*n',
+                'inclusive' : True,
+            },
             'tags' : [
                 {
                     'value' : 'green',
@@ -3712,6 +3861,10 @@ class TestClientAPI( unittest.TestCase ):
         d = json.loads( text )
         
         expected_result = {
+            'autocomplete_text' : {
+                'search_text' : '',
+                'inclusive' : True,
+            },
             'tags' : []
         }
         
@@ -3741,6 +3894,10 @@ class TestClientAPI( unittest.TestCase ):
         
         # note this also tests sort
         expected_result = {
+            'autocomplete_text' : {
+                'search_text' : 'gre',
+                'inclusive' : True,
+            },
             'tags' : [
                 {
                     'value' : 'green car',
@@ -3779,6 +3936,10 @@ class TestClientAPI( unittest.TestCase ):
         
         # note this also tests sort
         expected_result = {
+            'autocomplete_text' : {
+                'search_text' : 'gre',
+                'inclusive' : True,
+            },
             'tags' : [
                 {
                     'value' : 'green car',
@@ -3818,6 +3979,10 @@ class TestClientAPI( unittest.TestCase ):
         
         # note this also tests sort
         expected_result = {
+            'autocomplete_text' : {
+                'search_text' : '*',
+                'inclusive' : True,
+            },
             'tags' : []
         }
         
@@ -8310,7 +8475,7 @@ class TestClientAPI( unittest.TestCase ):
         self.assertEqual( locations[0][ 'ideal_weight' ], 1 )
         self.assertEqual( locations[0][ 'max_num_bytes' ], None )
         self.assertEqual( locations[0][ 'path' ], os.path.join( TG.test_controller.db_dir, 'client_files' ) )
-        self.assertEqual( set( locations[0][ 'prefixes' ] ), set( HydrusFilesPhysicalStorage.IteratePrefixes( 'f' ) ).union( HydrusFilesPhysicalStorage.IteratePrefixes( 't' ) ) )
+        self.assertEqual( set( locations[0][ 'prefixes' ] ), set( HydrusFilesPhysicalStorage.IteratePrefixes( 'f', HydrusFilesPhysicalStorage.DEFAULT_PREFIX_LENGTH ) ).union( HydrusFilesPhysicalStorage.IteratePrefixes( 't', HydrusFilesPhysicalStorage.DEFAULT_PREFIX_LENGTH ) ) )
         
     
     def _test_permission_failures( self, connection, set_up_permissions ):

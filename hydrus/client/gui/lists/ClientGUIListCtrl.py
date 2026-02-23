@@ -19,6 +19,7 @@ from hydrus.client import ClientGlobals as CG
 from hydrus.client import ClientSerialisable
 from hydrus.client.gui import ClientGUIDragDrop
 from hydrus.client.gui import ClientGUICore as CGC
+from hydrus.client.gui import ClientGUIDialogsFiles
 from hydrus.client.gui import ClientGUIDialogsMessage
 from hydrus.client.gui import ClientGUIDialogsQuick
 from hydrus.client.gui import ClientGUIFunctions
@@ -444,7 +445,7 @@ class HydrusListItemModel( QC.QAbstractItemModel ):
             
             existing_sort_logical_index = CGLC.column_list_column_type_logical_position_lookup[ self._column_list_type ][ self._sort_column_type ]
             
-        except:
+        except Exception as e:
             
             existing_sort_logical_index = 0
             
@@ -1584,7 +1585,7 @@ class BetterListCtrlPanel( QW.QWidget ):
             
             json = export_object.DumpToString()
             
-            with QP.FileDialog( self, 'select where to save the json file', default_filename = 'export.json', wildcard = 'JSON (*.json)', acceptMode = QW.QFileDialog.AcceptMode.AcceptSave, fileMode = QW.QFileDialog.FileMode.AnyFile ) as f_dlg:
+            with ClientGUIDialogsFiles.FileDialog( self, 'select where to save the json file', default_filename = 'export.json', wildcard = 'JSON (*.json)', acceptMode = QW.QFileDialog.AcceptMode.AcceptSave, fileMode = QW.QFileDialog.FileMode.AnyFile ) as f_dlg:
                 
                 if f_dlg.exec() == QW.QDialog.DialogCode.Accepted:
                     
@@ -1777,7 +1778,7 @@ class BetterListCtrlPanel( QW.QWidget ):
     
     def _ImportFromJSON( self ):
         
-        with QP.FileDialog( self, 'select the json or jsons with the serialised data', acceptMode = QW.QFileDialog.AcceptMode.AcceptOpen, fileMode = QW.QFileDialog.FileMode.ExistingFiles, wildcard = 'JSON (*.json)' ) as dlg:
+        with ClientGUIDialogsFiles.FileDialog( self, 'select the json or jsons with the serialised data', acceptMode = QW.QFileDialog.AcceptMode.AcceptOpen, fileMode = QW.QFileDialog.FileMode.ExistingFiles, wildcard = 'JSON (*.json)' ) as dlg:
             
             if dlg.exec() == QW.QDialog.DialogCode.Accepted:
                 
@@ -1792,7 +1793,7 @@ class BetterListCtrlPanel( QW.QWidget ):
     
     def _ImportFromPNG( self ):
         
-        with QP.FileDialog( self, 'select the png or pngs with the encoded data', acceptMode = QW.QFileDialog.AcceptMode.AcceptOpen, fileMode = QW.QFileDialog.FileMode.ExistingFiles, wildcard = 'PNG (*.png)' ) as dlg:
+        with ClientGUIDialogsFiles.FileDialog( self, 'select the png or pngs with the encoded data', acceptMode = QW.QFileDialog.AcceptMode.AcceptOpen, fileMode = QW.QFileDialog.FileMode.ExistingFiles, wildcard = 'PNG (*.png)' ) as dlg:
             
             if dlg.exec() == QW.QDialog.DialogCode.Accepted:
                 
@@ -2118,7 +2119,7 @@ class BetterListCtrlPanel( QW.QWidget ):
         QP.AddToLayout( self._buttonbox, window, CC.FLAGS_CENTER_PERPENDICULAR )
         
     
-    def ImportFromDragDrop( self, paths ):
+    def ImportFromDragDrop( self, paths: list[ str ] ):
         
         from hydrus.client.gui import ClientGUIDialogsQuick
         
@@ -2128,7 +2129,12 @@ class BetterListCtrlPanel( QW.QWidget ):
         
         if result == QW.QDialog.DialogCode.Accepted:
             
-            ( jsons, pngs ) = HydrusLists.PartitionIteratorIntoLists( lambda path: path.endswith( '.png' ), paths )
+            def list_test( path: str ):
+                
+                return path.endswith( '.png' )
+                
+            
+            ( jsons, pngs ) = HydrusLists.PartitionIteratorIntoLists( list_test, paths )
             
             self._ImportPNGs( pngs )
             self._ImportJSONs( jsons )

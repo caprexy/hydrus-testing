@@ -9,9 +9,21 @@ The hydrus client has a sophisticated and completely user-customisable download 
 The downloader is highly parallelisable, but the default [bandwidth rules](#bandwidth) should stop you from running too hot and downloading so much at once that you annoy the servers you are downloading from.
 
 !!! danger
-    It is very important that you take this slow. Many users get overexcited with their new ability to download 500,000 files _and then do so_, only discovering later that 98% of what they got was junk that they now have to wade through. Figure out what workflows work for you, how fast you process files, what content you _actually_ want, how much bandwidth and hard drive space you have, and prioritise and throttle your incoming downloads to match. If you can realistically only archive/delete filter 50 files a day, there is little benefit to downloading 500 new files a day. START SLOW.
+    It is very important that you take this slow. Many users get overexcited with their new ability to download 500,000 files _and then do so_, only discovering later that 98% of what they got was junk that they now have to wade through. Figure out what workflows work for you, how fast you process files, what content you _actually_ want, how much bandwidth and hard drive space you have, and prioritise and throttle your incoming downloads to match. If you can realistically only archive/delete filter 50 files a day, there is little benefit to downloading 500 new files a day.
+    
+    START SLOW.
 
 It also takes a decent whack of CPU to import a file. You'll usually never notice this with just one hard drive import going, but if you have twenty different download queues all competing for database access and individual 0.1-second hits of heavy CPU work, you will discover your client starts to judder and lag. Keep it in mind, and you'll figure out what your computer is happy with. I also recommend you try to keep your total loaded files/urls to be under 20,000 to keep things snappy. Remember that you can pause your import queues, if you need to calm things down a bit.
+
+!!! note "403 errors"
+    Hydrus's downloader tech is pretty old, and as the infrastructure of the internet changes, some things are breaking.
+    
+    You may get a 403 result for a search or file download. This is often because a CDN (e.g. CloudFlare) is gating the site with a captcha-like test. It can hit users in certain IP regions or VPN networks worse. The rules are often applied dynamically, so it sometimes passes within a week.
+    
+    The situation is, unfortunately, generally getting worse. Some users have had success with tools like [Hydrus Companion](https://gitgud.io/prkc/hydrus-companion), which can synchronise browser User-Agent and cookies to hydrus, but this is proving less reliable these days. Others have been experimenting with alternate downloaders that use official APIs. These are sometimes great; but some are very restricted and need a login. Check out the [user-run downloader repository](https://github.com/CuddleBear92/Hydrus-Presets-and-Scripts) to see what people have figured out. There are also more sophisticated downloader solutions like [hydownloader](https://github.com/hyuugi/hydownloader) and [gallery-dl](https://github.com/mikf/gallery-dl), but these take some time to set up.
+    
+    Hydev is planning to retire default downloaders that become less reliable. I am not yet sure what I will do long-term, but I am thinking about it. Sorry for the trouble!
+    
 
 ## Downloader types
 
@@ -206,6 +218,9 @@ Again: the real problem with downloading is not finding new things, it is keepin
 
 ## Logins
 
+!!! warning
+    Never use important accounts with hydrus. Hydrus does not store credentials securely. Also, if you accidentally download too much at once, or a site suddenly changes their policies, a linked account can get banned. If you link an account to hydrus, always use a throwaway account you don't care much about.
+
 **This system often breaks and is sometimes a hassle deal with! If you need to log in to anything more clever than a booru, use Hydrus Companion or similar to copy your cookies across!**
 
 The client supports a very basic and ugly login system. It can handle simple sites and is as [completely user-customisable as the downloader system](downloader_login.md). The client starts with multiple login scripts by default, which you can review under _network->logins->manage logins_:
@@ -213,9 +228,6 @@ The client supports a very basic and ugly login system. It can handle simple sit
 ![](images/manage_logins.png)
 
 Many sites grant all their content without you having to log in at all, but others require it for NSFW or special content, or you may wish to take advantage of site-side user preferences like personal blacklists. If you wish, you can give hydrus some login details here, and it will try to login--just as a browser would--before it downloads anything from that domain.
-
-!!! warning
-    As a general rule, I do not recommend you use important accounts with hydrus. Use a throwaway account you don't care much about.
 
 To start using a login script, select the domain and click 'edit credentials'. You'll put in your username/password, and then 'activate' the login for the domain, and that should be it! The next time you try to get something from that site, the first request will wait (usually about ten seconds) while a login popup performs the login. Most logins last for about thirty days (and many refresh that 30-day timer every time you make a new request), so once you are set up, you usually never notice it again, especially if you have a subscription on the domain.
 

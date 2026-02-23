@@ -66,6 +66,7 @@ from hydrus.test import TestClientMetadataConditional
 from hydrus.test import TestClientMetadataMigration
 from hydrus.test import TestClientMigration
 from hydrus.test import TestClientNetworking
+from hydrus.test import TestClientNetworkingSettings
 from hydrus.test import TestClientParsing
 from hydrus.test import TestClientSearch
 from hydrus.test import TestClientTags
@@ -285,17 +286,17 @@ class Controller( object ):
         
         base_location = ClientFilesPhysical.FilesStorageBaseLocation( client_files_default, 1 )
         
-        for prefix in HydrusFilesPhysicalStorage.IteratePrefixes( 'f' ):
+        for prefix in HydrusFilesPhysicalStorage.IteratePrefixes( 'f', HydrusFilesPhysicalStorage.DEFAULT_PREFIX_LENGTH ):
             
             client_files_subfolders.append( ClientFilesPhysical.FilesStorageSubfolder( prefix, base_location ) )
             
         
-        for prefix in HydrusFilesPhysicalStorage.IteratePrefixes( 't' ):
+        for prefix in HydrusFilesPhysicalStorage.IteratePrefixes( 't', HydrusFilesPhysicalStorage.DEFAULT_PREFIX_LENGTH ):
             
             client_files_subfolders.append( ClientFilesPhysical.FilesStorageSubfolder( prefix, base_location ) )
             
         
-        self._name_read_responses[ 'client_files_subfolders' ] = client_files_subfolders
+        self._name_read_responses[ 'client_files_subfolders' ] = ( HydrusFilesPhysicalStorage.DEFAULT_PREFIX_LENGTH, client_files_subfolders )
         
         self._name_read_responses[ 'sessions' ] = []
         self._name_read_responses[ 'tag_parents' ] = {}
@@ -786,7 +787,7 @@ class Controller( object ):
                 return self._param_read_responses[ ( name, args ) ]
                 
             
-        except:
+        except Exception as e:
             
             pass
             
@@ -942,6 +943,7 @@ class Controller( object ):
         
         module_lookup[ 'networking' ] = [
             TestClientNetworking,
+            TestClientNetworkingSettings,
             TestHydrusNetworking
         ]
         

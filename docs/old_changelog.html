@@ -35,6 +35,203 @@
             <h1 id="changelog"><a href="#changelog">changelog</a></h1>
             <ul>
                 <li>
+                    <h2 id="version_660"><a href="#version_660">version 660</a></h2>
+                    <ul>
+                        <li><h3>misc</h3></li>
+                        <li>I cleaned up some internal layout logic in my new QtMediaPlayer. transitioning from certain landscape to portrait videos should no longer reposition the video to the right when you have 'use the same QtMediaPlayer' checkbox ticked. thank you for the reports. let's try one more time: if you are happy with this, I'll make it real</li>
+                        <li>the new 'help: random 403 errors' menu items on every retry button were driving me nuts, so I moved them to the 'retry ignored' button selection dialog</li>
+                        <li>fixed several issues when loading an Ugoira (or several other animation types) that has a faulty (0 or null) number of frames</li>
+                        <li>the 'check database integrity' job is completely removed. this thing is only useful for detecting SQLite-level corruption, which we often see as a 'malformed' error, and really should be run from the command line interface, on one file at a time, when working through the 'help my db is broke.txt' document. several users have wasted time with this thing over the years hoping it would fix other bugs--unfortunately, it does not</li>
+                        <li>added `database-&gt;db maintenance-&gt;clear orphan URL mappings`, a new job that helps resolve some 'system:num_urls' stuff if your client.master.db has been damaged</li>
+                        <li><h3>cleaner venv setup</h3></li>
+                        <li>_this only matters for users who run from source_</li>
+                        <li>thanks to a user, the setup_venv scripts and general venv setup are simplified and improved. years of behind-the-scenes cruft is cleared</li>
+                        <li>for a while, I've maintained both a scatter of old requirement.txts to handle the different choices you make in `setup_venv.blah` and a more modern `pyproject.toml` file that bundles everything in a nicer way and can be used by tools like `uv`. the setup_venv script routine is now updated to talk to that pyproject.toml, so all the old .txts are gone. this cleans up how your venv is installed, making it one atomic call and allowing easier editing of package choices in future (also removes the duplicate maintenance situation)</li>
+                        <li>further, the three setup_venv scripts are converted into stubs that call one single multiplat `setup_venv.py` file. you can just run that `setup_venv.py` file on its own and it works, so that is now the recommendation for all platforms. this script now talks about how to launch the program after its 'Done!' message, too</li>
+                        <li>I've updated the 'running from source' help to talk about this. also, anyone who manually pip-installs their venv is using a different command to hit the single `pyproject.toml` rather than the requirements.txts, and I added some stuff about the venv `activate` script, and I talked a bit about python vs pythonw in Windows</li>
+                        <li>as I recently did with the setup_venv, I have decided to rename some of the groups in the `pyproject.toml`. the three groups `mpv-new`, `opencv-new`, and `qt6-new` are being renamed to `xxxx-normal`. I am achieving this today simply by duplicating the groups with new names, so using the old `xxxx-new` name will still work for now. I will be deleting the old group names in three months, v673, so if you have an automatic script that installs hydrus, please update it. since these are the default selections, I presume no one uses them and this doesn't really matter</li>
+                        <li>I will also delete the old `setup_venv.bat/sh/command` stubs and the basedir `requirements.txt` in three months, in v673, to be clean. if you use them in an automated script, please switch over to the .py</li>
+                        <li>I ran out of time, but I'll do the same for setup_help and git pull--it can all be multiplat .py soon</li>
+                        <li><h3>file storage granularity test</h3></li>
+                        <li>_for advanced users now, everyone else soon_</li>
+                        <li>after much planning, I am rolling out a test for advanced users with fewer than 1 million files</li>
+                        <li>that improves latency on file access and other maintenance operations for clients with many files</li>
+                        <li>essentially, instead of storing files in just 256 "fxx" folders, the client can now use 4096 "fxx/x" folders. same for the "txx" thumbnails. this means 16x fewer files per subfolder, where big clients are pushing 10,000+, making for snappier folder scans and file access in the client and when you do something like 'open video externally' and the video player does a brief folder scan for subtitle files and such</li>
+                        <li>this is all accessed through `database-&gt;move media files...` in a new panel. your client now reports if it is currently granularity 2 or 3 and offers to migrate you to 3. this process involves moving all your files, so it can take a while. my tests suggest about 5,000 files/s on an NVME, so thumbs will zip by, but the actual files on HDD may be a good bit slower, especially on funky USB or NAS connections where there's odd buffering. it is cancellable if it is taking too long</li>
+                        <li>some first-draft help here too https://hydrusnetwork.github.io/hydrus/database_migration.html#granularity</li>
+                        <li>one additional issue is that this storage rejigger makes a backup look completely different! we don't want to do a 100% backup run just to mirror file moves, so this panel offers a similar migration for a backup. the text and dialogs guide you through it all</li>
+                        <li>if you are an advanced user with fewer than 1 million files and you definitely absolutely have a backup, I invite you to try this operation out. obviously let me know if there are any problems, but please also note the final dialog, which will say how long the migration took, and report to me something like, "500,000 files, thumbs on NVME, files on sata HDD, 21 minutes", which I hope to compile into nicer 'expect about x files/s on an HDD' estimates for the normal users</li>
+                        <li>if you have 8 million files and really want to do this, you can, but bear in mind it might be a three hour migration</li>
+                        <li><h3>boring file storage work</h3></li>
+                        <li>the tables that track physical file storage have been updated to better handle 4096 rows rather than 256. all the tables now use a shared `location_id` table, with the same single read/write calls, ensuring all items here agree on portable vs absolute path storage and so on</li>
+                        <li>the database now stores how 'granular' its file storage is, with default being 2 (2 hex chars, or 256 subfolders). if the stored file locations do not match this, it raises a serious error</li>
+                        <li>the folder relocation code (when you do a 'move files now' run, and which will be replaced this year I hope by multi-location support and background migration) is more KISS and foolproof</li>
+                        <li>the folder repair code (when you boot with a missing location) is similarly more KISS and foolproof</li>
+                        <li>fixed a storage weight initialisation issue that could occur if the 'ideal thumbnail location' was specifically set and also in the media file storage locations list</li>
+                        <li>all prefix-generating methods now always take an explicit prefix length/granularity. there is no longer a nebulous default anywhere</li>
+                        <li>reworked my folder granularisation to be safer, to work both up and down, and added status reporting for an UI panel</li>
+                        <li>wrote a routine that looks at an existing base storage location and guesses its current granularisation for job pre-checks</li>
+                        <li>wrote a database granularisation routine and added 'aieeeee, it broke half way through, try and undo' code</li>
+                        <li>the client files manager now only performs rigorous checks of all existing subfolder locations on startup. any migration or other re-init reason now just repopulates the subfolder store</li>
+                        <li>when file subdirs of granularity 3 or more are migrated, if the intervening parent directory, for instance `f83` in a `f83/d` prefix, is empty afterwards, it is now deleted</li>
+                        <li>the percentage usages in 'move media files' are now 2 sig figs since we are distributing 4096 things now and you'd get 0.0% sometimes</li>
+                        <li>the mysterious 'empty_client_files' archive is updated regarding all this</li>
+                        <li>wrote a 'help my db is the wrong granularity.txt' help document in the db dir for help recovering from big problems here</li>
+                        <li>wrote unit tests for 2to3 and 3to2 granularisation and cancel tech</li>
+                        <li>wrote unit tests for estimate folder granularity tech</li>
+                        <li><h3>boring cleanup</h3></li>
+                        <li>I deleted a bunch of very old 'running from source' help from the pre-everything-is-a-wheel days that is no longer pertinent</li>
+                        <li>deleted some ancient unused client service UI code</li>
+                    </ul>
+                </li>
+                <li>
+                    <h2 id="version_659"><a href="#version_659">version 659</a></h2>
+                    <ul>
+                        <li><h3>misc</h3></li>
+                        <li>certain PNGs that would load very slowly now load about ten times faster! specifically, any PNG with gamma/chromaticity information in its header now has that converted to a bespoke ICC Profile, and the normal ICC Profile translation code is applied to convert to sRGB. my hacky (and possibly unstable) manual conversion is no longer used. typically, a big ~50 megapixel PNG (7,000x8,000) would render in about ten seconds with lots of memory churn; now it renders in one, with far less. this fix brought to you by ChatGPT, which understands ICC Profile header construction, `r/g/bTRC` gamma curves, and D50/D65 `wtpt` and `chad` applicability across ICC Profile engine versions far better than it did last year. thanks for your patience, those who submitted weird big PNGs in. if you have any PNGs (or any other file of course) that suddenly render with the wrong colour, I'm interested to see them</li>
+                        <li>the `network-&gt;downloaders` menu has new 'user-run downloader repository' and 'help: random 403 errors' items. the former links to https://github.com/CuddleBear92/Hydrus-Presets-and-Scripts, the latter opens a little help window that talks about the infrastructure changes that are slowly breaking some of the original default downloaders. this help window is now linked off any downloader 'retry' icon button that has 'ignored' stuff to retry, and I replicated it in the 'getting started with downloaders' help, so I hope anyone who gets perplexed by a 403 will now see what's going on. there is no excellent solution here, but I am thinking about it (issue #1963)</li>
+                        <li><h3>fixes</h3></li>
+                        <li>fixed the new unified directory picker to always return a path with backslashes on Windows. it was producing one with forward slashes, which in certain listdir operations (like 'add folder' in the import files dialog) was generating paths with mixed slashes and backslashes(!!). python handles this situation well and it didn't break anything, but it is ugly, unwise, and caused some path duplicates since you could add the same path to certain lists with both slashes and backslashes. the various 'add filename(s)' dialogs were already normalising correctly, so I believe we are fully covered here now. thank you to the users who reported this</li>
+                        <li>fixed a stupid bug that meant if you renamed an import folder, it would always be renamed as a non-duplicate 'import folder name (1)' alternate</li>
+                        <li>I think I have fixed the issue where the new QtMediaPlayer could sometimes 'scroll inside' the viewport of the player on a mouse wheel event. this seemed to be aggravated by the aspect ratio changes caused by having the `TEST: Use the same QtMediaPlayer through media transitions` checkbox on. I was going to force everyone out of this test mode (it is currently default), but I think I fixed it correct so I won't yet. let me know how things are now--if we are good, then I think it is time to formalise this test into a real thing</li>
+                        <li>fixed some bad reset code in the duplicate potential pair search when you have the 'try to state a final estimate' setting on. it was possible for it to do some confidence math on a hitrate of over 100% and it got into trouble when generating the count. the reset code is nicer and the math now checks for and handles non-sensible input (issue #1960)</li>
+                        <li><h3>client api</h3></li>
+                        <li>fixed the 'fetch SVG file for rating service' routine when the SVG file is a user override in their `db/static` dir</li>
+                        <li>fixed the 'this service doesn't use an SVG rating' 404 when fetching SVG files for rating services--it was 500ing previously. added a unit test for this too</li>
+                        <li>fixed the error handling in this SVG fetch routine to handle certain other error cases better</li>
+                        <li>client api version is now 88</li>
+                    </ul>
+                </li>
+                <li>
+                    <h2 id="version_658"><a href="#version_658">version 658</a></h2>
+                    <ul>
+                        <li><h3>misc</h3></li>
+                        <li>fixed an exclusive-to-inclusive system predicate parsing regression, for instance the input `system:filetype is not x` was parsing as `system:filetype is x`, which was because of a logical hole in a recent rewrite</li>
+                        <li>added 'Active Search Predicates list height' to `options-&gt;file search`. this is the list _above_ the tag autocomplete input on normal search boxes. defaults to 6 (was previously 8 due to weirdness)</li>
+                        <li>tag lists no longer default to min height 8 rows but 1. let me know if anything sizes crazy now</li>
+                        <li>fixed the `help-&gt;about` db transaction period, which was typoed and calculating off the wrong number</li>
+                        <li>the 'don't use important accounts with hydrus' warning is clarified and unified in the downloader help, login dialog, and now session cookies dialog</li>
+                        <li>the media viewer right-click menu now has a 'player' sub-menu at the end that says what player (mpv, QtMediaPlayer, Hydrus Native stuff) is currently in view. might be worth tucking this into a deeper advanced/maintenance/debug menu somewhere in a future reshuffle, but for now it is there</li>
+                        <li><h3>QtMediaPlayer (and an mpv thing)</h3></li>
+                        <li>fixed a 'C++ object already deleted' instability error with the new GraphicsView QtMediaPlayer. I had this a couple of times in devving but needed to tighten up how some mouse event hacks were owned and destroyed</li>
+                        <li>fixed an UI hang that could sometimes occur in PySide6 when opening a new media viewer when the preview viewer already has a QtMediaPlayer loaded</li>
+                        <li>added `TEST: Use the same mpv player through media transitions` and `TEST: Use the same QtMediaPlayer through media transitions` options to `options-&gt;media playback`. previously, I would always create or swap to a different player when navigating from video to video, because re-using the same guy was super flickery or crash city. things are better now and I'm open to testing it more</li>
+                        <li>added `TEST: Use OpenGL Window in QtMediaPlayer` to `options-&gt;media playback`. maybe it improves performance for big vids? I noticed it can cause some initial window-level flickering in Windows, but it is worth trying in different situations</li>
+                        <li><h3>boring QtMediaPlayer cleanup</h3></li>
+                        <li>the new GraphicsView test now loops natively and tracks 'num plays' through some fudgy maths (previously it hooked into the video 'end; stop' statechange and manually did 'seek 0; play'). I've had some reports about the program hanging on video end-loop, so let's see if this helps that</li>
+                        <li>made the mouse-move event hack a little safer</li>
+                        <li>rewrote some media destruction signals and moved QtMediaPlayer destruction responsibility from the GUI to the MediaContainer itself. there's no more weird reparenting</li>
+                        <li>QtMediaPlayers are now cleaned up more aggressively. generally a 500ms timer instead of 5s</li>
+                        <li><h3>boring cleanup</h3></li>
+                        <li>broke `options-&gt;media playback` into sections and fixed some layout issues</li>
+                        <li>fixed a bit of foolishness that was causing the `hydrus_test_boot.py` unit test script to always exit( 1 ) even when everything was OK</li>
+                        <li>relatedly, replaced all lazy `except:` handling with `except Exception as e:`</li>
+                        <li>if the duplicates filter fails to generate a visual duplicate comparison, the error now only makes one popup per program boot. it still spams some basic 'hash x failed' stuff to log so we can debug the issue</li>
+                        <li>cleaned up a little 'menu last click' global out of HG</li>
+                        <li>added a 'Run the launch script, not the .py' note to the 'running from source' help</li>
+                        <li><h3>boring import options overhaul</h3></li>
+                        <li>broke the 'file filtering import options' (stuff like allowed filetypes and min/max filesize) out of 'file import options (legacy)' just like I did presentation and prefetch import options the other week. the legacy object now holds a 'file filtering import options' sub-object in prep for the conversion to the new options structure</li>
+                        <li>did the same for the 'location import options' (stuff like where to put the file and auto-archive/url options)</li>
+                        <li>wrote an edit panel for 'file filtering import options'</li>
+                        <li>did the same for 'location import options'</li>
+                        <li>fixed the red warning text about an invalid, empty import destination context to now appear properly and instantly on dialog load, if it boots with an invalid destination context</li>
+                        <li>'associate primary/source urls' checkboxes are no longer hidden behind advanced mode</li>
+                        <li>the prefetch import options are now in their own edit panel</li>
+                        <li>the presentation and notes import options panels are now QWidgets not ScrollingEditPanels, which will fix some jank layout we've seen here</li>
+                        <li>fixed some layout expanding issues in the file import options panel</li>
+                        <li>network job and file import statuses now work with a file filtering import options object for their filtering decisions, not a file import options</li>
+                        <li>importers now consult a location import options for pre-work destination validity checks</li>
+                        <li>updated the unit tests for the new 'file filtering import options' object</li>
+                        <li>updated the unit tests for the 'location import options' object</li>
+                        <li>wrote some very basic prefitch import options unit tests</li>
+                    </ul>
+                </li>
+                <li>
+                    <h2 id="version_657"><a href="#version_657">version 657</a></h2>
+                    <ul>
+                        <li><h3>misc</h3></li>
+                        <li>the 'edit header' dialog panel, where you configure custom http headers, is given a usability pass. this thing never got out of debug-tier and none of the widgets were labelled lol. it has a grid with labels and some nicer strings for the enigmatic 'approved' status</li>
+                        <li>added some safety code for the new `tldextract` test I added last week. one of the calls I make is newer than I expected (issue #1953)</li>
+                        <li><h3>QtMediaPlayer</h3></li>
+                        <li>I revisited the QtMediaPlayer, which is an experimental alternate to the mpv embed that I haven't touched in ages. I may have strongly succeeded</li>
+                        <li>I am rolling out a new type of QtMediaPlayer. the old one is called (Test 1 - VideoWidget); this new one is (Test 2 - GraphicsView). both are listed in the `options-&gt;media playback` settings for audio/video/animation. this new GraphicsView solution does not have the 'always on top' rendering problem the old one had, meaning the seek bar is shown and behaves properly!! this guy basically looks just like mpv, although it is less customisable and your performance and interpolation quality etc.. may be a little worse (issue #1883)</li>
+                        <li>if you have had trouble with mpv, please try this new GraphicsView player out. I don't know how crashy it is, so brace yourself. I'm interested in performance, errors, what filetypes it cannot handle, which mouse interactions fail to register, anything you think pertinent. if we can nail it down, I can polish all this as the new mpv fallback for macOS and Wayland and anyone else with mpv trouble</li>
+                        <li>one thing I did notice btw is that it spams some debug-warning stuff to your log when it loads files with unusual metadata. I silenced a bunch of it with Qt logging options, but there's more to do</li>
+                        <li>all users can now see the experimental QtMediaPlayer options. previously it was blocked behind source users in advanced mode</li>
+                        <li>the volume button now appears for QtMediaPlayers (although obviously still hidden by the 'on top' behaviour of the old one)</li>
+                        <li>fixed volume application for the experimental QtMediaPlayer--because of a type problem, it was either doing mute at 0 or 100% everywhere else</li>
+                        <li>fixed an unload media bug in the QtMediaPlayer for PyQt6</li>
+                        <li><h3>new hydrus API web-based browser</h3></li>
+                        <li>another user has created a web portal for your hydrus install! check it out here: https://hyaway.com/ | documentation https://docs.hyaway.com/ | github https://github.com/hyaway/hyaway</li>
+                        <li>I don't know much about it, but it looks cool and is open source. you can use the hosted version at that site or set up your own instance. if you want to browse your client from your phone, check it out</li>
+                        <li>I added this to the collection of other Client API tools on the landing page here https://hydrusnetwork.github.io/hydrus/client_api.html</li>
+                        <li><h3>Client API rating colours</h3></li>
+                        <li>the `Services Object` in the Client API now provides the pen and brush colours for different rating service states, in #ffffff format, and bools for `show_in_thumbnail` and `show_in_thumbnail_even_if_null`, and for numerical ratings, a convenience `allows_zero`.</li>
+                        <li>updated the unit tests to check for this and the help to talk about it</li>
+                        <li>the Client API version is now 87</li>
+                        <li><h3>python 3.14 and opencv</h3></li>
+                        <li>tl;dr: you can now get setup with hydrus on the (new) python 3.14 easily--just do `setup_venv` as normal and select `(a)dvanced` and then `(t)est` for everything</li>
+                        <li>it has been previously tricky to run hydrus on python 3.14 because of some funny library stuff. you could fudge things manually, but it wasn't nice, there were image rendering bugs, and the `setup_venv` script didn't have a path for it. this situation improved in just the last week, which is good because some users on bleeding edge OSes are getting rollouts of 3.14 right now (issue #1950)</li>
+                        <li>the 'test' version of `opencv-python-headless` is bumped from `4.12.0.88` to `4.13.0.90`, which is the first version of OpenCV that is ok with the newer numpy</li>
+                        <li>the 'normal' vs 'test' OpenCV requirement bundles now include `numpy`, with respective versions of `~2.3.1` and `2.4.1`</li>
+                        <li>as a side thing, the new 'test' Qt, `PySide6 6.10.1`, seems to be the first version that installs nicely on 3.14</li>
+                        <li>all the `setup_venv` scripts now ask if you want the `(n)ormal` rather than the `(n)ew` version of things. 'new' was originally to contrast to the 'old' version, but these days it is more confusing vs 'test'</li>
+                        <li>all the `setup_venv` scripts now direct users on Py 3.14 to go in (a)dvanced mode. get the (t)est versions of things and you should be good, but I'll be interested to hear where not</li>
+                        <li>all the `setup_venv` scripts now temporarily ask a fourth question in (a)dvanced mode, for the new domain-parsing `tldextract` library, which I added test code for last week</li>
+                        <li>as a side thing, in the `setup_venv.bat` script, the secret (d)ev mode that adds some unit test and build gubbins now allows you (me) to make the (a)dvanced choices</li>
+                        <li>I also maintain a 3.14 test environment here in my IDE. I can do 3.10-3.14 and PyQt6 and regularly do simple tests in all of them, so I hope we'll catch bigger version-specific issues, and we'll know when 3.10 is no longer supportable</li>
+                        <li><h3>network domain management overhaul, mostly boring</h3></li>
+                        <li>a push on better per-domain settings and status tracking went well. like with other recent rewrites, I've mostly just done behind the scenes prep work, with no large changes yet, but I'm feeling good about it. in the end of this, I hope to have domain-specific settings for most of the stuff in the 'general' panel of `options-&gt;connection`. again, like with other settings overhauls, I'm planning to have a global default which you then override with custom settings for a particular domain if you wish. ideally we'll have favourites/templates and the ability to bundle these settings with a downloader, like you can headers and bandwidth rules</li>
+                        <li>the 'halt new jobs as long as this many network infrastructure errors on their domain' setting now applies to all levels of the domain. if `site.com` gets a bunch of connection errors, a request to `subdomain.site.com` will now also wait on that option. the domain vs second-level domain logic here was previously spotty, and some subdomain stuff wasn't waiting when it was supposed to</li>
+                        <li>sketched out `DomainSettings` and `DomainStatus` objects to track the settings and basic event history on a per-domain basis in an easily future-extendable way. they don't work yet, but I'm prepping for it</li>
+                        <li>wrote some unit tests for the new objects</li>
+                        <li>domain errors are now reported with an event type, in prep for the new objects</li>
+                        <li><h3>boring code cleanup</h3></li>
+                        <li>retired my older directory picker dialog in favour of my newer 'quick' select, replacing use in the file import window; move media files; repair file locations; clear orphan files; review services manual export update files; manual import update files; select backup location; restore backup location</li>
+                        <li>updated my 'quick' directory select call to remember the last directory selected this session (defaulting to install dir for now), and if the caller doesn't have a specific location in mind, to use that last selection as the starting dir of the next dialog open. it also handles cancel results a little nicer</li>
+                        <li>removed one or two 'is the user in Qt5?' checks with the QtMediaPlayer work. I'm not sure when, but I think I'll purge the rest of these completely in the next month or so, probably at the next 'future build' commit. it is basically time to move on</li>
+                    </ul>
+                </li>
+                <li>
+                    <h2 id="version_656"><a href="#version_656">version 656</a></h2>
+                    <ul>
+                        <li><h3>misc</h3></li>
+                        <li>when you edit an ongoing tag autocomplete input to have or not have a leading hyphen, the results should now switch more reliably between `skirt` and `-skirt`. the logic was patchy here, previously, updating itself on certain unnamespaced text but not namespaced, and I believe in some cases in-construction OR predicates could be negated, but it should now, on all updates, work on all the correct predicates</li>
+                        <li>all file and directory pickers across the program now no longer realise any symlinks you select. I never knew this was default behaviour, but now, if you tell 'move media files...' or similar to use a symlink, it will result in that dir you select, not the realised endpoint</li>
+                        <li>if a file storage location involves a symlink, the 'move media files' dialog and related log entries will now say `/some/path (Real path: /other/path)`. if there is a problem determining the path, it will say `/some/path (Real path: Could not determine real path--check log!)`</li>
+                        <li>the example urls list in the 'edit page parser' dialog now has copy/paste buttons for quicker in and out when you just need to grab some urls to test with etc.. . I will brush up this list object more in future and do duplicate removal and right-click menus and stuff</li>
+                        <li>when hydrus does a free space check on your temp dir before a big db job, it now recognises the `SQLITE_TMPDIR` environment variable, which overrides and tells SQLite to use a different path, and it will check and talk about this guy instead. if SQLite is indeed redirected with `SQLITE_TMPDIR`, this is now stated in `help-&gt;about`</li>
+                        <li>if duplicates auto-resolution fails to generate visual data for a file, it now prints a message to the log about the bad file hash, considers the file pair not duplicate, and no longer halts the whole system (issue #1950)</li>
+                        <li><h3>import options overhaul</h3></li>
+                        <li>I have planned out the overhaul to import options. we will migrate to a system that is similar to the current url-type-based  tag/note import options customisation but for all ways of importing and all import options types. the edit panels will get a strong usability and clarity pass, all gathered in one panel, with favourites/templates for quick load of preferred options, and the import options will be split into more granular types so you can, say, easily set up a specific tag blacklist while keeping default tag parsing rules. the current expected default categories will be global, local import, gallery, subscription, watcher, specific url classes, and the new import options will be: prefetch logic, file filtering, tag filtering, locations, tags, notes, presentation. should be easier to add a 'ratings options' to this sort of thing, too, in future</li>
+                        <li>I did a load of boring behind the scenes cleanup this week to move this forward. nothing works different, but the shape of things is altering--</li>
+                        <li>I wrote a new import options container object that will dynamically hold a swiss-cheese template of various options for a particular layer of the options context, and a manager to hold the defaults and serve the appropriate specific import options based on who is asking</li>
+                        <li>the 'file import options' across the program is converted to 'file import options (legacy)'</li>
+                        <li>same deal for 'tag import options'</li>
+                        <li>wrote a 'prefetch import options'</li>
+                        <li>the hash-check, url-check, and url-neighbour logic is migrated inside a file import options to this new prefetch import options, and all importers and options now interact with the prefetch import options, care-of the file import options. same thing will happen in future for the file filter stuff ('don't allow x filetype' etc...) and the locations stuff ('put it here and archive it'); and on the tag side for blacklist vs tag destination options; before I migrate all those newly decoupled lego blocks up one level to the new container class with, fingers crossed, minimum fuss</li>
+                        <li>the edit file import options now breaks the prefetch logic out to a new UI box. these options are no longer hidden behind advanced mode, but for this transition period I will now start the box collapsed and have a scary warning label</li>
+                        <li>now I have thought about this and planned it, I feel fairly good. I think I am 20% done and believe I can keep chipping away like this for a smooth migration, no gigantic changes at any stage</li>
+                        <li><h3>client api</h3></li>
+                        <li>the `/add_tags/search_tags` Client API request now delivers a very simple `autocomplete_text` Object that says what actual text the user entered and whether it was inclusive (i.e. started with a hyphen or not). I considered adding some other A/C logic like 'is explicit wildcard' and 'what automatic autocomplete wildcars are being added' to this structure, but that stuff is a little messy so I'll KISS for now</li>
+                        <li>the unit tests now check this</li>
+                        <li>Client API version is now 86</li>
+                        <li><h3>other boring cleanup</h3></li>
+                        <li>moved file and directory picker buttons out of `QtPorting` and harmonised the 'quick, select an existing dir' routine to `DialogsQuick`</li>
+                        <li>moved the richer file and directory dialogs out of `QtPorting`</li>
+                        <li><h3>new domain logic prep</h3></li>
+                        <li>if the client has access to the library `tldextract`, it now defers to this for generating the 'second level domain' of an URL (or, more strictly, detecting the 'public suffix domain'). this is the `blah.com` style of domain, with no subdomains. at the moment, hydrus naively collapses a `blah.co.uk` to the unhelpful `co.uk` for various domain-management purposes (you may see this under _review session cookies_), which doesn't cause any errors but is ugly and does cause bloated sessions that collect all cookies under this TLD into one bucket and forces everything under the domain to share bandwidth tokens on this false second-level umbrella. this new library navigates this and produces the `blah.co.uk` result as desired</li>
+                        <li>`help-&gt;about` now lists `tldextract` under the 'optional libraries' section</li>
+                        <li>this code does nothing yet for almost all users. in the near future I will roll the library into the requirements for source users and the future build so we can test for issues. I have written a failsafe to try to not break any logins (anyone who has login cookies in a 'co.uk' style session entry will keep using that bucket after the planned transition), but we'll see if anything else pops up</li>
+                        <li><h3>future build committed</h3></li>
+                        <li>This release commits the changes tested with the recent future build. The test went well, and there are no special instructions for the update. Source users are encouraged to rebuild their venvs this week. Update as normal, and you will get--</li>
+                        <li>- `requests` (networking library) `2.32.4` to `2.32.5`</li>
+                        <li>- `mpv` (the python wrapper that talks to the dll) `1.0.7` to `1.0.8`</li>
+                        <li>- `PySide6` (Qt) normal `6.8.3` to `6.9.3`</li>
+                        <li>- `PySide6` (Qt) test, for source users, `6.9.3` to `6.10.1`</li>
+                    </ul>
+                </li>
+                <li>
                     <h2 id="version_655"><a href="#version_655">version 655</a></h2>
                     <ul>
                         <li><h3>misc</h3></li>
@@ -18109,7 +18306,7 @@
                         <li>collapsed some of the helter-skelter db code in prep for future improvements</li>
                         <li>moved daemon code to separate files</li>
                         <li>silenced server upnp errors</li>
-                        <li>all except: continue lines are banished!</li>
+                        <li>all except Exception as e: continue lines are banished!</li>
                         <li>cleaned up some miscellaneous exception code</li>
                         <li>cleaned some ugly behind the scenes a/c dropdown button code</li>
                         <li>did some general code cleanup</li>

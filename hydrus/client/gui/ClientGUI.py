@@ -38,6 +38,7 @@ from hydrus.client.gui import ClientGUIAboutWindow
 from hydrus.client.gui import ClientGUIAsync
 from hydrus.client.gui import ClientGUICharts
 from hydrus.client.gui import ClientGUIDialogs
+from hydrus.client.gui import ClientGUIDialogsFiles
 from hydrus.client.gui import ClientGUIDialogsManage
 from hydrus.client.gui import ClientGUIDialogsMessage
 from hydrus.client.gui import ClientGUIDialogsQuick
@@ -58,8 +59,8 @@ from hydrus.client.gui import QLocator
 from hydrus.client.gui import ClientGUILocatorSearchProviders
 from hydrus.client.gui import QtPorting as QP
 from hydrus.client.gui.canvas import ClientGUICanvasFrame
-from hydrus.client.gui.canvas import ClientGUICanvasMedia
 from hydrus.client.gui.canvas import ClientGUIMPV
+from hydrus.client.gui.canvas import ClientGUIQtMediaPlayer
 from hydrus.client.gui.exporting import ClientGUIExport
 from hydrus.client.gui.importing import ClientGUIImportFolders
 from hydrus.client.gui.media import ClientGUIMediaControls
@@ -78,6 +79,7 @@ from hydrus.client.gui.pages import ClientGUIPageManager
 from hydrus.client.gui.pages import ClientGUIPages
 from hydrus.client.gui.pages import ClientGUIPagesCore
 from hydrus.client.gui.pages import ClientGUISession
+from hydrus.client.gui.panels import ClientGUIFilesPhysicalStoragePanels
 from hydrus.client.gui.panels import ClientGUILocalFileImports
 from hydrus.client.gui.panels import ClientGUIScrolledPanels
 from hydrus.client.gui.panels import ClientGUIScrolledPanelsEdit
@@ -998,20 +1000,6 @@ class FrameGUI( CAC.ApplicationCommandProcessorMixin, ClientGUITopLevelWindows.M
             
         
     
-    def _CheckDBIntegrity( self ):
-        
-        message = 'This will check the SQLite database files for corruption. It may take several minutes to complete.'
-        message += '\n' * 2
-        message += 'In general, this routine is quite laggy, especially as it checks always checks your entire database, and is better done from the command line where you have more control. If you are worried your database is malformed, check [install_dir/db/help my db is broke.txt].'
-        
-        result = ClientGUIDialogsQuick.GetYesNo( self, message, title = 'Run integrity check?', yes_label = 'do it', no_label = 'forget it' )
-        
-        if result == QW.QDialog.DialogCode.Accepted:
-            
-            self._controller.Write( 'db_integrity' )
-            
-        
-    
     def _CheckImportFolder( self, name = None ):
         
         if self._controller.new_options.GetBoolean( 'pause_import_folders_sync' ):
@@ -1084,15 +1072,16 @@ class FrameGUI( CAC.ApplicationCommandProcessorMixin, ClientGUITopLevelWindows.M
         
         if result == 'move':
             
-            with QP.DirDialog( self, 'Select location.' ) as dlg_3:
+            try:
                 
-                if dlg_3.exec() == QW.QDialog.DialogCode.Accepted:
-                    
-                    path = dlg_3.GetPath()
-                    
-                    self._controller.CallToThread( client_files_manager.ClearOrphans, path )
-                    
+                path = ClientGUIDialogsQuick.PickDirectory( self, 'Select location.' )
                 
+            except HydrusExceptions.CancelledException:
+                
+                return
+                
+            
+            self._controller.CallToThread( client_files_manager.ClearOrphans, path )
             
         elif result == 'delete':
             
@@ -1115,6 +1104,22 @@ class FrameGUI( CAC.ApplicationCommandProcessorMixin, ClientGUITopLevelWindows.M
         if result == QW.QDialog.DialogCode.Accepted:
             
             self._controller.Write( 'clear_orphan_file_records' )
+            
+        
+    
+    def _ClearOrphanURLMappings( self ):
+        
+        text = 'DO NOT RUN THIS UNLESS YOU KNOW YOU NEED TO'
+        text += '\n' * 2
+        text += 'This will instruct the database to review its URL records\' integrity. If a mapping exists without a master URL, the mapping will be removed. This is useful if your client.master.db has been damaged or truncated because of a partial backup rollback.'
+        text += '\n' * 2
+        text += 'It will create a popup message while it works, but it will not have any feedback until it is complete. It may lock up the client for a bit.'
+        
+        result = ClientGUIDialogsQuick.GetYesNo( self, text, yes_label = 'do it', no_label = 'forget it' )
+        
+        if result == QW.QDialog.DialogCode.Accepted:
+            
+            self._controller.Write( 'clear_orphan_url_mappings' )
             
         
     
@@ -1215,7 +1220,7 @@ class FrameGUI( CAC.ApplicationCommandProcessorMixin, ClientGUITopLevelWindows.M
             
             if result == 'file':
                 
-                with QP.FileDialog( self, 'select where to save content', default_filename = 'output.txt', acceptMode = QW.QFileDialog.AcceptMode.AcceptSave, fileMode = QW.QFileDialog.FileMode.AnyFile ) as f_dlg:
+                with ClientGUIDialogsFiles.FileDialog( self, 'select where to save content', default_filename = 'output.txt', acceptMode = QW.QFileDialog.AcceptMode.AcceptSave, fileMode = QW.QFileDialog.FileMode.AnyFile ) as f_dlg:
                     
                     if f_dlg.exec() == QW.QDialog.DialogCode.Accepted:
                         
@@ -1486,14 +1491,14 @@ class FrameGUI( CAC.ApplicationCommandProcessorMixin, ClientGUITopLevelWindows.M
         
         job_status.SetStatusTitle( 'sub gap downloader test' )
         
-        from hydrus.client.importing.options import FileImportOptions
+        from hydrus.client.importing.options import FileImportOptionsLegacy
         
-        file_import_options = FileImportOptions.FileImportOptions()
+        file_import_options = FileImportOptionsLegacy.FileImportOptionsLegacy()
         file_import_options.SetIsDefault( True )
         
-        from hydrus.client.importing.options import TagImportOptions
+        from hydrus.client.importing.options import TagImportOptionsLegacy
         
-        tag_import_options = TagImportOptions.TagImportOptions( is_default = True )
+        tag_import_options = TagImportOptionsLegacy.TagImportOptionsLegacy( is_default = True )
         
         from hydrus.client.importing.options import NoteImportOptions
         
@@ -1760,7 +1765,7 @@ QMenuBar::item { padding: 2px 8px; margin: 0px; }'''
             
             hash = bytes.fromhex( file_hash_hex )
             
-        except:
+        except Exception as e:
             
             ClientGUIDialogsMessage.ShowCritical( self, 'Error', 'Could not parse that hash!' )
             
@@ -2201,7 +2206,7 @@ ATTACH "client.mappings.db" as external_mappings;'''
                             
                             update = HydrusSerialisable.CreateFromNetworkBytes( update_network_bytes )
                             
-                        except:
+                        except Exception as e:
                             
                             num_errors += 1
                             
@@ -2257,15 +2262,16 @@ ATTACH "client.mappings.db" as external_mappings;'''
         
         ClientGUIDialogsMessage.ShowInformation( self, message )
         
-        with QP.DirDialog( self, 'Select location.' ) as dlg:
+        try:
             
-            if dlg.exec() == QW.QDialog.DialogCode.Accepted:
-                
-                path = dlg.GetPath()
-                
-                self._controller.CallToThread( do_it, path )
-                
+            path = ClientGUIDialogsQuick.PickDirectory( self, 'Select location.' )
             
+        except HydrusExceptions.CancelledException:
+            
+            return
+            
+        
+        self._controller.CallToThread( do_it, path )
         
     
     def _ImportURL(
@@ -3363,6 +3369,8 @@ ATTACH "client.mappings.db" as external_mappings;'''
         
         ClientGUIMenus.AppendMenuItem( db_maintenance_submenu, 'clear/fix orphan file records' + HC.UNICODE_ELLIPSIS, 'Clear out surplus file records that have not been deleted correctly.', self._ClearOrphanFileRecords )
         
+        ClientGUIMenus.AppendMenuItem( db_maintenance_submenu, 'clear orphan URL mappings' + HC.UNICODE_ELLIPSIS, 'Clear out surplus URL mappings after a damaged client.master.db.', self._ClearOrphanURLMappings )
+        
         ClientGUIMenus.AppendMenuItem( db_maintenance_submenu, 'clear orphan tables' + HC.UNICODE_ELLIPSIS, 'Clear out surplus db tables that have not been deleted correctly.', self._ClearOrphanTables )
         
         ClientGUIMenus.AppendMenuItem( db_maintenance_submenu, 'clear orphan hashed serialisables' + HC.UNICODE_ELLIPSIS, 'Clear non-needed cached hashed serialisable objects.', self._ClearOrphanHashedSerialisables )
@@ -3375,8 +3383,6 @@ ATTACH "client.mappings.db" as external_mappings;'''
         
         check_submenu = ClientGUIMenus.GenerateMenu( menu )
         
-        ClientGUIMenus.AppendMenuItem( check_submenu, 'database integrity' + HC.UNICODE_ELLIPSIS, 'Examine the database for file corruption.', self._CheckDBIntegrity )
-        ClientGUIMenus.AppendSeparator( check_submenu )
         ClientGUIMenus.AppendMenuItem( check_submenu, 'fix invalid tags' + HC.UNICODE_ELLIPSIS, 'Scan the database for invalid tags.', self._RepairInvalidTags )
         ClientGUIMenus.AppendMenuItem( check_submenu, 'fix logically inconsistent mappings' + HC.UNICODE_ELLIPSIS, 'Remove tags that are occupying two mutually exclusive states.', self._FixLogicallyInconsistentMappings )
         ClientGUIMenus.AppendSeparator( check_submenu )
@@ -3812,6 +3818,8 @@ ATTACH "client.mappings.db" as external_mappings;'''
             
         
         ClientGUIMenus.AppendMenuItem( submenu, 'import downloaders' + HC.UNICODE_ELLIPSIS, 'Import new download capability through encoded pngs from other users.', self._ImportDownloaders )
+        ClientGUIMenus.AppendMenuIconItem( submenu, 'user-run downloader repository', 'Open the user-run github repository that has many additional downloaders.', CC.global_icons().github, ClientPaths.LaunchURLInWebBrowser, 'https://github.com/CuddleBear92/Hydrus-Presets-and-Scripts' )
+        ClientGUIMenus.AppendMenuItem( submenu, 'help: random 403 errors', 'Open a short help window regarding 403 errors.', ClientGUIDownloaders.Show403Info, self )
         ClientGUIMenus.AppendMenuItem( submenu, 'export downloaders' + HC.UNICODE_ELLIPSIS, 'Export downloader components to easy-import pngs.', self._ExportDownloader )
         
         ClientGUIMenus.AppendSeparator( submenu )
@@ -5252,7 +5260,7 @@ ATTACH "client.mappings.db" as external_mappings;'''
         
         with ClientGUITopLevelWindowsPanels.DialogNullipotent( self, 'move media files' ) as dlg:
             
-            panel = ClientGUIScrolledPanelsReview.MoveMediaFilesPanel( dlg, self._controller )
+            panel = ClientGUIFilesPhysicalStoragePanels.MoveMediaFilesPanel( dlg, self._controller )
             
             dlg.SetPanel( panel )
             
@@ -5290,7 +5298,7 @@ ATTACH "client.mappings.db" as external_mappings;'''
             
             account_key = bytes.fromhex( account_key_hex )
             
-        except:
+        except Exception as e:
             
             ClientGUIDialogsMessage.ShowCritical( self, 'Error', 'Could not parse that account id!' )
             
@@ -5839,7 +5847,7 @@ ATTACH "client.mappings.db" as external_mappings;'''
                     
                     working_now = True
                     
-                except:
+                except Exception as e:
                     
                     pass
                     
@@ -6706,9 +6714,11 @@ ATTACH "client.mappings.db" as external_mappings;'''
         
         from hydrus.client.files.images import ClientVisualDataTuningSuite
         
-        test_dir = QW.QFileDialog.getExistingDirectory( self, '', '' )
-        
-        if test_dir == '':
+        try:
+            
+            test_dir = ClientGUIDialogsQuick.PickDirectory( self, 'select dir' )
+            
+        except HydrusExceptions.CancelledException:
             
             return
             
@@ -6731,9 +6741,11 @@ ATTACH "client.mappings.db" as external_mappings;'''
         
         from hydrus.client.files.images import ClientVisualDataTuningSuite
         
-        test_dir = QW.QFileDialog.getExistingDirectory( self, '', '' )
-        
-        if test_dir == '':
+        try:
+            
+            test_dir = ClientGUIDialogsQuick.PickDirectory( self, 'select dir' )
+            
+        except HydrusExceptions.CancelledException:
             
             return
             
@@ -6922,80 +6934,76 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
         
         ClientGUIDialogsMessage.ShowInformation( self, backup_intro )
         
-        with QP.DirDialog( self, 'Select backup location.' ) as dlg:
+        try:
             
-            if dlg.exec() == QW.QDialog.DialogCode.Accepted:
+            path = ClientGUIDialogsQuick.PickDirectory( self, 'Select backup location.' )
+            
+        except HydrusExceptions.CancelledException:
+            
+            return
+            
+        
+        if path == self._controller.GetDBDir():
+            
+            ClientGUIDialogsMessage.ShowWarning( self, 'That directory is your current database directory! You cannot backup to the same location you are backing up from!' )
+            
+            return
+            
+        
+        if path == existing_backup_path:
+            
+            ClientGUIDialogsMessage.ShowInformation( self, 'The path you chose is your current saved backup path. No changes have been made.' )
+            
+            return
+            
+        
+        if os.path.exists( path ):
+            
+            filenames = os.listdir( path )
+            
+            num_files = len( filenames )
+            
+            if num_files == 0:
                 
-                path = dlg.GetPath()
+                extra_info = 'It looks currently empty, which is great--there is no danger of anything being overwritten.'
                 
-                if path == '':
-                    
-                    return
-                    
+            elif 'client.db' in filenames:
                 
-                if path == self._controller.GetDBDir():
-                    
-                    ClientGUIDialogsMessage.ShowWarning( self, 'That directory is your current database directory! You cannot backup to the same location you are backing up from!' )
-                    
-                    return
-                    
+                extra_info = 'It looks like a client database already exists in the location--be certain that it is ok to overwrite it.'
                 
-                if path == existing_backup_path:
-                    
-                    ClientGUIDialogsMessage.ShowInformation( self, 'The path you chose is your current saved backup path. No changes have been made.' )
-                    
-                    return
-                    
+            else:
                 
-                if os.path.exists( path ):
-                    
-                    filenames = os.listdir( path )
-                    
-                    num_files = len( filenames )
-                    
-                    if num_files == 0:
-                        
-                        extra_info = 'It looks currently empty, which is great--there is no danger of anything being overwritten.'
-                        
-                    elif 'client.db' in filenames:
-                        
-                        extra_info = 'It looks like a client database already exists in the location--be certain that it is ok to overwrite it.'
-                        
-                    else:
-                        
-                        extra_info = 'It seems to have some files already in it--be careful and make sure you chose the correct location.'
-                        
-                    
-                else:
-                    
-                    extra_info = 'The path does not exist yet--it will be created when you make your first backup.'
-                    
+                extra_info = 'It seems to have some files already in it--be careful and make sure you chose the correct location.'
                 
-                text = 'You chose "' + path + '". Here is what I understand about it:'
-                text += '\n' * 2
-                text += extra_info
-                text += '\n' * 2
-                text += 'Are you sure this is the correct directory?'
+            
+        else:
+            
+            extra_info = 'The path does not exist yet--it will be created when you make your first backup.'
+            
+        
+        text = 'You chose "' + path + '". Here is what I understand about it:'
+        text += '\n' * 2
+        text += extra_info
+        text += '\n' * 2
+        text += 'Are you sure this is the correct directory?'
+        
+        result = ClientGUIDialogsQuick.GetYesNo( self, text )
+        
+        if result == QW.QDialog.DialogCode.Accepted:
+            
+            self._new_options.SetNoneableString( 'backup_path', path )
+            self._new_options.SetNoneableInteger( 'last_backup_time', None )
+            
+            text = 'Would you like to create your backup now?'
+            
+            result = ClientGUIDialogsQuick.GetYesNo( self, text )
+            
+            if result == QW.QDialog.DialogCode.Accepted:
                 
-                result = ClientGUIDialogsQuick.GetYesNo( self, text )
+                self._BackupDatabase()
                 
-                if result == QW.QDialog.DialogCode.Accepted:
-                    
-                    self._new_options.SetNoneableString( 'backup_path', path )
-                    self._new_options.SetNoneableInteger( 'last_backup_time', None )
-                    
-                    text = 'Would you like to create your backup now?'
-                    
-                    result = ClientGUIDialogsQuick.GetYesNo( self, text )
-                    
-                    if result == QW.QDialog.DialogCode.Accepted:
-                        
-                        self._BackupDatabase()
-                        
-                    
-                    self._menu_updater_database.update()
-                    
-                
+            
+            self._menu_updater_database.update()
             
         
     
@@ -7748,7 +7756,7 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
                     
                 
             
-        except:
+        except Exception as e:
             
             # obsolote comment below, leaving it just in case
             #
@@ -8655,7 +8663,7 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
         self._persistent_mpv_widgets.append( mpv_widget )
         
     
-    def _UnloadAndPurgeQtMediaplayer( self, qt_media_player: ClientGUICanvasMedia.QtMediaPlayer ):
+    def _UnloadAndPurgeQtMediaPlayer( self, qt_media_player: ClientGUIQtMediaPlayer.QtMediaPlayerVideoWidget | ClientGUIQtMediaPlayer.QtMediaPlayerGraphicsView):
         
         if qt_media_player.IsCompletelyUnloaded():
             
@@ -8665,18 +8673,18 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
             
             qt_media_player.TryToUnload()
             
-            self._controller.CallLaterQtSafe( self, 5.0, 'purge QMediaPlayer', self._UnloadAndPurgeQtMediaplayer, qt_media_player )
+            self._controller.CallLaterQtSafe( self, 2.0, 'purge QMediaPlayer', self._UnloadAndPurgeQtMediaPlayer, qt_media_player )
             
         
     
-    def ReleaseQtMediaPlayer( self, qt_media_player: ClientGUICanvasMedia.QtMediaPlayer ):
+    def ReleaseQtMediaPlayer( self, qt_media_player: ClientGUIQtMediaPlayer.QtMediaPlayerVideoWidget | ClientGUIQtMediaPlayer.QtMediaPlayerGraphicsView ):
         
         if qt_media_player.parentWidget() != self:
             
             qt_media_player.setParent( self )
             
         
-        self._controller.CallLaterQtSafe( self, 5.0, 'start QMediaPlayer purge', self._UnloadAndPurgeQtMediaplayer, qt_media_player )
+        self._controller.CallLaterQtSafe( self, 0.5, 'start QMediaPlayer purge', self._UnloadAndPurgeQtMediaPlayer, qt_media_player )
         
     
     def REPEATINGBandwidth( self ):

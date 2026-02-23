@@ -15,8 +15,10 @@ from hydrus.client import ClientGlobals as CG
 from hydrus.client import ClientLocation
 from hydrus.client import ClientPaths
 from hydrus.client import ClientSerialisable
+from hydrus.client.gui import ClientGUIDialogsFiles
 from hydrus.client.gui import ClientGUIDialogsMessage
 from hydrus.client.gui import ClientGUIDialogsQuick
+from hydrus.client.gui import ClientGUIDownloaders
 from hydrus.client.gui import ClientGUIFunctions
 from hydrus.client.gui import ClientGUIMenus
 from hydrus.client.gui import ClientGUISerialisable
@@ -49,13 +51,21 @@ def ClearFileSeeds( win: QW.QWidget, file_seed_cache: ClientImportFileSeeds.File
 def GetRetryIgnoredParam( window ):
     
     choice_tuples = [
+        ( 'help: random 403 errors', 'help_403', 'show help regarding 403 errors' ),
         ( 'retry all', None, 'retry all' ),
         ( 'retry 403s', '^403', 'retry all 403s' ),
         ( 'retry 404s', '^404', 'retry all 404s' ),
         ( 'retry blacklisted', 'blacklisted!$', 'retry all blacklisted' )
     ]
     
-    return ClientGUIDialogsQuick.SelectFromListButtons( window, 'select what to retry', choice_tuples )
+    result = ClientGUIDialogsQuick.SelectFromListButtons( window, 'select what to retry', choice_tuples )
+    
+    if result == 'help_403':
+        
+        ClientGUIDownloaders.Show403Info( window )
+        
+        raise HydrusExceptions.CancelledException()
+        
     
 
 # TODO: I pulled this stuff out of the button to share it with the panel. TBH anything without Qt may be better as be FSC methods
@@ -132,7 +142,7 @@ def ImportFromClipboard( win: QW.QWidget, file_seed_cache: ClientImportFileSeeds
 
 def ImportFromPNG( win: QW.QWidget, file_seed_cache: ClientImportFileSeeds.FileSeedCache ):
     
-    with QP.FileDialog( win, 'select the png with the sources', wildcard = 'PNG (*.png)' ) as dlg:
+    with ClientGUIDialogsFiles.FileDialog( win, 'select the png with the sources', wildcard = 'PNG (*.png)' ) as dlg:
         
         if dlg.exec() == QW.QDialog.DialogCode.Accepted:
             
@@ -425,7 +435,7 @@ class EditFileSeedCachePanel( ClientGUIScrolledPanels.EditPanel ):
             
             pretty_file_seed_index = HydrusNumbers.ToHumanInt( file_seed_index )
             
-        except:
+        except Exception as e:
             
             pretty_file_seed_index = '--'
             
@@ -470,7 +480,7 @@ class EditFileSeedCachePanel( ClientGUIScrolledPanels.EditPanel ):
             
             file_seed_index = self._file_seed_cache.GetFileSeedIndex( file_seed )
             
-        except:
+        except Exception as e:
             
             file_seed_index = -1
             
