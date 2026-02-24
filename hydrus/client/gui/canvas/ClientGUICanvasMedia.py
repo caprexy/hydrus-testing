@@ -1597,7 +1597,7 @@ class MediaContainer( QW.QWidget ):
         
         if media_window is not None:
             
-            launch_media_viewer_classes = ( Animation, ClientGUIMPV.MPVWidget, StaticImage, ClientGUIQtMediaPlayer.QtMediaPlayerVideoWidget, ClientGUIQtMediaPlayer.QtMediaPlayerGraphicsView )
+            launch_media_viewer_classes = ( Animation, ClientGUIMPV.MPVWidget, StaticImage, CBZThumbnailViewer, ClientGUIQtMediaPlayer.QtMediaPlayerVideoWidget, ClientGUIQtMediaPlayer.QtMediaPlayerGraphicsView )
             
             media_window.removeEventFilter( self._additional_event_filter )
             
@@ -1806,7 +1806,7 @@ class MediaContainer( QW.QWidget ):
             
             self._media_window.installEventFilter( self._additional_event_filter )
             
-            launch_media_viewer_classes = ( Animation, ClientGUIMPV.MPVWidget, StaticImage, ClientGUIQtMediaPlayer.QtMediaPlayerVideoWidget, ClientGUIQtMediaPlayer.QtMediaPlayerGraphicsView )
+            launch_media_viewer_classes = ( Animation, ClientGUIMPV.MPVWidget, StaticImage, CBZThumbnailViewer, ClientGUIQtMediaPlayer.QtMediaPlayerVideoWidget, ClientGUIQtMediaPlayer.QtMediaPlayerGraphicsView )
             
             if isinstance( self._media_window, launch_media_viewer_classes ):
                 
@@ -3980,7 +3980,6 @@ class CBZThumbnailViewer( QW.QWidget ):
         
         self.update()
         self.readyForNeighbourPrefetch.emit()
-        
     
     def paintEvent( self, event ):
         
